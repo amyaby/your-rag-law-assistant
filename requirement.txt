@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+pydantic-settings
+python-dotenv
+PyMuPDF
+psycopg[binary]
+pgvector
+pytest
+httpx
+google-genai
