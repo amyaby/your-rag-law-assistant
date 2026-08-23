@@ -1,21 +1,29 @@
-import google.generativeai as genai
-from app.config import Settings
+"""
+llm.py — LLM Answer Generation
+Wraps the Gemini chat API. Takes a user question + relevant context
+(chunks from the database) and generates a human-readable answer.
+The prompt instructs Gemini to only answer based on the provided context.
+"""
 
-settings = Settings()
-genai.configure(api_key=settings.gemini_api_key)
+from google import genai
+from app.config import settings
 
-
-def chat(messages: list[dict], tools: list = None) -> dict:
-    model = genai.GenerativeModel(settings.llm_model)
-    chat = model.start_chat(history=[])
-    for msg in messages:
-        if msg["role"] == "user":
-            chat.send_message(msg["content"])
-    return {"content": chat.last.text}
+client = genai.Client(api_key=settings.gemini_api_key)
 
 
-def embed_text(text: str) -> list[float]:
-    result = genai.embed_content(
-        model=f"models/{settings.embedding_model}", content=text
+def generate_answer(question: str, context: str) -> str:
+    prompt = f"""You are a helpful university assistant.
+Answer the question ONLY based on the context below.
+If the context doesn't contain the answer, say "I don't have information about that."
+
+Context:
+{context}
+
+Question: {question}
+Answer:"""
+
+    response = client.models.generate_content(
+        model=settings.llm_model,
+        contents=prompt,
     )
-    return result["embedding"]
+    return response.text

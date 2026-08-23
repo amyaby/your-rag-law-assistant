@@ -1,4 +1,4 @@
-import math
+"""import math
 from google import genai
 from app.config import settings#Imports Google’s modern, official Gemini SDK.
 
@@ -25,4 +25,4 @@ def cosine(a, b):#a and b are vectors
 
 
 print(f"hello vs ML:    {cosine(v1, v2):.4f}")
-print(f"hello vs hello: {cosine(v1, v3):.4f}")
+print(f"hello vs hello: {cosine(v1, v3):.4f}")"""

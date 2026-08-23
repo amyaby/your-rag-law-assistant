@@ -215,3 +215,5 @@ Read these to learn how to measure your RAG system:
 - LLM-as-Judge: ask Gemini to score your answers
 - Retrieval metrics: did the right chunks get retrieved?
 - Answer quality: is the answer grounded in the context?
+
+![alt text](image.png)
