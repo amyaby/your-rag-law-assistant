@@ -1,2 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Secrets — .env holds the Gemini API key and the database password
 .env
-venv
+
+# Evaluation cache: regenerable, and it stores model output
+app/evaluation/.eval_cache.json
+
+# Local artefacts
+/tmp/
+*.log
+data/cache/

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>المساعد القانوني المغربي</title>
+<style>
+*{box-sizing:border-box;font-family:system-ui, sans-serif}
+body{max-width:700px;margin:40px auto;padding:0 16px;background:#f8f9fa}
+h1{color:#0d3b66;text-align:center}
+#chat{border:1px solid #ddd;background:#fff;border-radius:12px;padding:16px;min-height:300px;max-height:500px;overflow:auto}
+.msg{margin:10px 0;padding:10px 14px;border-radius:10px;max-width:85%}
+.user{background:#0d3b66;color:#fff;margin-right:auto;text-align:left;direction:ltr}
+.bot{background:#e9f5ff;color:#222;white-space:pre-wrap}
+.sources{font-size:12px;color:#666;margin-top:6px}
+.row{display:flex;gap:8px;margin-top:12px}
+input{flex:1;padding:12px;border:1px solid #ccc;border-radius:8px;font-size:16px}
+button{padding:12px 20px;background:#0d3b66;color:#fff;border:none;border-radius:8px;cursor:pointer}
+button:disabled{opacity:0.5}
+</style>
+</head>
+<body>
+<h1>⚖️ المساعد القانوني المغربي</h1>
+<div id="chat"></div>
+<div class="row">
+<input id="q" placeholder="سول على القانون... مثلا: شكون عندو الحق فالحضانة؟" onkeydown="if(event.key==='Enter')ask()">
+<button id="btn" onclick="ask()">إرسال</button>
+</div>
+<script>
+const chat = document.getElementById('chat');
+const q = document.getElementById('q');
+const btn = document.getElementById('btn');
+
+function addMsg(text, cls, sources){
+  const d = document.createElement('div');
+  d.className = 'msg ' + cls;
+  d.textContent = text;
+  chat.appendChild(d);
+  if(sources && sources.length){
+    const s = document.createElement('div');
+    s.className = 'sources';
+    s.textContent = 'المصادر: ' + sources.map(x=> x.law + ' - ' + x.article + ' ('+ (x.similarity*100).toFixed(0)+'%)').join(' | ');
+    chat.appendChild(s);
+  }
+  chat.scrollTop = chat.scrollHeight;
+}
+
+async function ask(){
+  const question = q.value.trim();
+  if(!question) return;
+  addMsg(question, 'user');
+  q.value = '';
+  btn.disabled = true;
+  btn.textContent = '...';
+  try{
+    const r = await fetch('/ask', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({question})
+    });
+    const j = await r.json();
+    addMsg(j.answer || 'لا يوجد جواب', 'bot', j.sources);
+    if(j.scraped) addMsg('تم جلب معلومات إضافية من بوابة عدالة', 'bot');
+  }catch(e){
+    addMsg('خطأ في الاتصال: ' + e, 'bot');
+  }
+  btn.disabled = false;
+  btn.textContent = 'إرسال';
+}
+</script>
+</body>
+</html>

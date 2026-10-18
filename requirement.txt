@@ -8,3 +8,8 @@ pgvector
 pytest
 httpx
 google-genai
+sentence-transformers
+requests
+beautifulsoup4
+ddgs
+duckduckgo-search

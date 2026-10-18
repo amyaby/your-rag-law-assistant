@@ -1,0 +1,53 @@
+# Direct dependencies for the Moroccan legal RAG.
+#
+# Install:  pip install -r requirements.txt
+# Verify:  pip check
+#
+# Only DIRECT dependencies are pinned here. Transitive deps (starlette,
+# pydantic_core, tokenizers, nvidia-*, ...) are resolved by pip and are
+# deliberately NOT pinned: they are platform-specific, and pinning the 15
+# CUDA wheels would make this file fail on any machine without that GPU.
+#
+# Versions below are the EXACT versions verified working in ./venv on
+# Python 3.10.12 / WSL Ubuntu 22.04.
+
+# --- web layer -------------------------------------------------------------
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+pydantic==2.13.4
+pydantic-settings==2.15.0
+python-dotenv==1.2.3
+
+# --- database --------------------------------------------------------------
+# psycopg 3 (NOT psycopg2). Vectors are passed as json.dumps(...) strings,
+# so the pgvector Python adapter is not required on the hot path.
+psycopg[binary]==3.3.4
+pgvector==0.5.0
+
+# --- embeddings ------------------------------------------------------------
+# multilingual-e5-small: 384 dimensions, unit-normalised.
+sentence-transformers==6.0.0
+torch==2.13.0
+transformers==5.16.1
+numpy==2.2.6
+
+# --- LLM -------------------------------------------------------------------
+google-genai==2.19.0
+
+# --- ingestion / scraping --------------------------------------------------
+pymupdf==1.28.2          # `import pymupdf` (fitz is the legacy alias)
+beautifulsoup4==4.15.0
+lxml==6.1.3
+requests==2.34.2
+
+# --- CRAG web fallback -----------------------------------------------------
+# ddgs is the CURRENT name. duckduckgo_search is DEPRECATED and kept only as
+# the fallback import in app/retrieval/web_search.py:39 — safe to drop later.
+ddgs==9.16.0
+duckduckgo_search==8.1.1
+
+# --- tests -----------------------------------------------------------------
+# NOT currently installed in ./venv, and tests/ contains no test functions.
+# Both are required to run a real pytest suite against TestClient.
+pytest==9.0.2
+httpx==0.28.1

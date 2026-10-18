@@ -1,29 +1,46 @@
-"""
-embed.py — Text to Vector Conversion
-Wraps the Gemini embedding API. Takes text (strings) and converts
-them to vectors (lists of 3072 numbers). Used in two places:
-1. Ingestion: convert PDF chunks before storing in PostgreSQL
-2. Search: convert user question to find similar chunks
-"""
+from sentence_transformers import SentenceTransformer
+import unicodedata
 
-from google import genai
 from app.config import settings
 
-client = genai.Client(api_key=settings.gemini_api_key)
+# Download once (~400MB), then works offline
+# SAME model used for both ingestion and query (critical!)
+# Read from config so there is a single source of truth for the model id.
+model = SentenceTransformer(settings.embedding_model)
+
+
+def normalize_arabic(text: str) -> str:
+    """
+    Fix garbled Arabic from PDF extraction.
+    PDF fonts often produce presentation-form ligatures/isolated forms
+    (e.g. ﺳﻮاء instead of سواء). NFKC maps them back to standard Arabic.
+    """
+    return unicodedata.normalize("NFKC", text)
+
 
 def embed_texts(texts: list[str]) -> list[list[float]]:
-    results = client.models.embed_content(
-        model=settings.embedding_model,
-        contents=texts,
-    )
-    return [e.values for e in results.embeddings]
-#when you only need to embed a single sentence.
+    """
+    Local embeddings — free, unlimited, no quota. For INGESTION.
+    Prepends "passage: " (required by multilingual-e5-small, asymmetric model).
+    """
+    if not texts:
+        return []
+    # Normalize Arabic + add passage prefix for stored text
+    prepared = ["passage: " + normalize_arabic(t) for t in texts]
+    vectors = model.encode(prepared, normalize_embeddings=True)
+    return [v.tolist() for v in vectors]
+
+
+def embed_query(text: str) -> list[float]:
+    """
+    Local embedding for a single QUERY string.
+    Prepends "query: " (differs from "passage: " — required by e5 asymmetric model).
+    """
+    prepared = "query: " + normalize_arabic(text)
+    vector = model.encode([prepared], normalize_embeddings=True)
+    return vector[0].tolist()
+
+
+# Keep embed_one as an alias for compatibility
 def embed_one(text: str) -> list[float]:
-    return embed_texts([text])[0]
-"""
-embed.py — Text to Vector Conversion
-Wraps the Gemini embedding API. Takes text (strings) and converts
-them to vectors (lists of 3072 numbers). Used in two places:
-1. Ingestion: convert PDF chunks before storing in PostgreSQL
-2. Search: convert user question to find similar chunks
-"""
+    return embed_query(text)

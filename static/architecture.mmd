@@ -1,0 +1,27 @@
+%% Paste this at https://mermaid.live or in VSCode Mermaid preview — 1 slide
+flowchart TB
+    subgraph PHASE1[PHASE 1 - OFFLINE INGESTION - Once per PDF]
+        A[Adala PDF - e.g. Code Penal] --> B[fitz PyMuPDF - extract text per page]
+        B --> C[NFKC normalize - fix سواء - + join split 447-1]
+        C --> D[Regex - المادة / الفصل - 1 article = 1 chunk - 870 chunks]
+        D --> E[embed - passage: - + multilingual-e5-small - 384 dims - LOCAL free]
+        E --> F[(PostgreSQL + pgvector - documents - content + vector + law + article)]
+    end
+    subgraph PHASE2[PHASE 2 - ONLINE QUERY - Per Question]
+        Q[User Q - ما هي عقوبة السرقة؟ - / Darija / French] --> R{has Arabic?}
+        R -- Yes --> S1[Keep as-is - 0 Gemini calls]
+        R -- No Arabizi/French --> S2[Gemini rephrase -> formal Arabic - cached]
+        S1 --> T
+        S2 --> T[embed - query: - + e5 -> 384 query vector]
+        T --> U[(pgvector search - <=> cosine - top 40 - keyword boost +0.02 - re-rank top 10 - filter >=0.78)]
+        U --> V{top score <0.78 or empty?}
+        V -- No --> W
+        V -- Yes --> X[Adala Live Scraper - /fr/search - __NEXT_DATA__ - HTML or PDF fallback]
+        X --> W[Top 10 chunks]
+        W --> Y[Gemini 3.6 Flash - prompt = 10 chunks + question - 1 API call]
+        Y --> Z[Answer in user language + sources - law + article citations]
+    end
+    style E fill:#c8f7c5
+    style T fill:#c8f7c5
+    style Y fill:#ffe5b4
+    style S2 fill:#ffe5b4

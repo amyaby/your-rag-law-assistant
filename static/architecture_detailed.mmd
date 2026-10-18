@@ -1,0 +1,60 @@
+%% Detailed RAG Architecture - paste at https://mermaid.live - every file + minute detail
+flowchart TB
+    %% CONFIG
+    subgraph CFG[0. Config - app/config.py:10]
+        ENV[.env GEMINI_API_KEY] --> SET[Settings BaseSettings]
+        SET --> DBURL[database_url postgresql://postgres:alx@localhost:5432/assistant]
+        SET --> LLM[llm_model gemini-3.6-flash]
+        SET --> EMB[embedding_model intfloat/multilingual-e5-small]
+    end
+
+    %% PHASE 1 INGESTION
+    subgraph P1[PHASE 1 - OFFLINE INGESTION - POST /ingest - app/main.py:57]
+        PDF[PDF adala.justice.gov.ma<br/>code-penal.pdf] --> LOAD[app/ingestion/chunker.py:51<br/>load_pdf fitz.open + page.get_text]
+        LOAD --> NORM1[app/ingestion/chunker.py:23<br/>normalize_arabic NFKC<br/>ﺳﻮاء -> سواء + fix الفصل 1-n-447 -> 447-1]
+        NORM1 --> REGEX[app/ingestion/chunker.py:18<br/>AR_ARTICLE regex ^s *Mada/Fasl s* d + ordinal<br/>finditer -> m.group1 = article number]
+        REGEX --> CHUNK[app/ingestion/chunker.py:72<br/>article_chunks<br/>1 article = 1 chunk<br/>870 chunks {law,article,content,source}]
+        CHUNK --> E1[app/core/embed.py:18<br/>embed_texts<br/>passage: + NFKC + SentenceTransformer.encode<br/>384 dims normalize_embeddings True]
+        E1 --> VEC[Vectors List 384 floats]
+        VEC --> STORE[app/retrieval/vector_store.py:34<br/>insert_chunks<br/>json.dumps vec ::vector<br/>INSERT content, embedding, law, article]
+        STORE --> PG[(PostgreSQL + pgvector<br/>CREATE EXTENSION vector<br/>documents id, content, embedding vector384, law, article, source)]
+        P1 --> START[app/main.py:44 startup create_table IF NOT EXISTS]
+        START --> PG
+    end
+
+    %% PHASE 2 QUERY
+    subgraph P2[PHASE 2 - ONLINE QUERY - POST /ask - app/main.py:107 - Every user question]
+        Q[User Question<br/>ما هي عقوبة السرقة؟<br/>kifach chikat / French] --> REPH[app/core/llm.py:17<br/>rephrase_query<br/>has_arabic = regex U0600-U06FF?<br/>Yes -> keep as-is 0 calls<br/>No -> Gemini rewrite Arabizi -> formal Arabic<br/>cached _rephrase_cache]
+        REPH --> EQ[app/core/embed.py:31<br/>embed_query<br/>query: + NFKC + e5 encode<br/>384 query vector]
+        EQ --> SEARCH[app/retrieval/search.py:24<br/>search query_vec top_k 10<br/>SELECT 1 - embedding <=> %s::vector AS similarity<br/>ORDER BY <=> LIMIT 40<br/>json.dumps vector twice]
+        SEARCH --> BOOST[app/retrieval/search.py:16<br/>_keyword_boost<br/>words len>=3 in content?<br/>hits *0.02 cap 0.05<br/>adjusted = sim + boost<br/>sort by score re-rank top 10<br/>filter similarity >=0.80]
+        BOOST --> GRADE{Grade relevance<br/>app/main.py:128<br/>top_score <0.78 or empty?<br/>or no keyword hit?}
+        GRADE -- Relevant --> CTX[Context = top 10 chunks]
+        GRADE -- Not relevant -> Need correction --> ADALA[app/retrieval/scraper.py:27<br/>scrape_adala_text<br/>GET adala.justice.gov.ma/fr/search term<br/>parse __NEXT_DATA__ JSON<br/>latestReleases + searchResult.data<br/>fetch HTML or PDF via curl + fitz<br/>article_chunks -> 3 chunks]
+        ADALA --> CHECK1{adala chunks >0?}
+        CHECK1 -- Yes --> MERGE1[results = scraped + pg_results]
+        CHECK1 -- No -> General web --> WEB[app/retrieval/web_search.py<br/>DuckDuckGo DDGS text site:adala or general<br/>fetch BeautifulSoup article/main<br/>filter arabic_ratio>0.65 + المادة count<br/>article_chunks -> 3 chunks<br/>OR Tavily API integrate.api.nvidia.com/v1]
+        WEB --> MERGE2[results = web + pg_results]
+        MERGE1 --> CTX
+        MERGE2 --> CTX
+        CTX --> PROMPT[app/core/llm.py:61<br/>generate_answer<br/>system_instruction: expert Moroccan advisor Darija<br/>bullet points bold penalties cite الفصل<br/>prompt = LEGAL CONTEXT 10 chunks + USER QUESTION]
+        PROMPT --> LLM[app/core/llm.py:82<br/>genai.Client gemini-3.6-flash<br/>1 API call<br/>or NVIDIA Llama fallback]
+        LLM --> ANS{Success?}
+        ANS -- Yes --> RESP[app/main.py:165<br/>return {answer, sources law+article+similarity, scraped, corrected}]
+        ANS -- 429/quota fail --> FALLBACK[app/core/llm.py:89<br/>print [LLM ERROR]<br/>return نعتذر الخدمة غير متوفرة بسبب ضغط القاعدة]
+        FALLBACK --> RESP
+        RESP --> UI[static/index.html:19<br/>static/js/app.js:4<br/>localStorage law_convs<br/>renderSidebar + chat bubbles<br/>details Sources law article similarity%]
+    end
+
+    %% EVALUATION
+    subgraph EVAL[EVALUATION - app/evaluation/test_questions.py:1]
+        Q15[15 Questions Arabic/Darija/French<br/>expected_facts + expected_articles] --> EVALRUN[app/evaluation/evaluate.py:1<br/>rephrase -> search -> grade -> generate<br/>fact_score hits/len<br/>citation_score expected intersect found<br/>retrieval_ok top>=0.78]
+    end
+
+    %% STYLE
+    style E1 fill:#c8f7c5
+    style EQ fill:#c8f7c5
+    style LLM fill:#ffe5b4
+    style REPH fill:#ffe5b4
+    style PG fill:#e0e7ff
+    style GRADE fill:#fecaca
