@@ -1,1 +1,296 @@
-<html>ok</html>
+<!DOCTYPE html>
+<html lang="fr" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Moroccan Legal RAG - Pipeline Flow</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<style>
+:root{
+  --bg:#0f1020; --panel:#16172b; --card:#1d1f36; --border:#2f2f57;
+  --red:#ff3b3b; --text:#e6e6e9; --muted:#a9a9c0; --green:#2ecc71; --blue:#4aa3ff;
+}
+*{margin:0;padding:0;box-sizing:border-box;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+body{background:var(--bg);color:var(--text);line-height:1.65;padding:1.5rem}
+.container{max-width:1400px;margin:0 auto}
+h1{color:var(--red);text-align:center;font-size:1.6rem;margin-bottom:.3rem}
+.sub{text-align:center;color:var(--muted);margin-bottom:1.4rem;font-size:.9rem}
+h2{color:#ffb3b3;margin:1.6rem 0 .8rem;font-size:1.15rem;border-left:4px solid var(--red);padding-left:.6rem}
+h3{color:#ffd0d0;margin:1rem 0 .5rem;font-size:1rem}
+.tabs{display:flex;gap:.6rem;flex-wrap:wrap;justify-content:center;margin-bottom:1.2rem}
+.tab{background:var(--panel);border:1px solid var(--border);color:var(--text);padding:.55rem 1.1rem;border-radius:12px;cursor:pointer;font-size:.85rem;transition:.15s}
+.tab:hover{border-color:var(--red)}
+.tab.active{background:var(--red);border-color:var(--red);color:#fff;font-weight:600}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:1.4rem;margin-bottom:1.2rem;overflow:auto}
+.mermaid{background:transparent;text-align:center}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:.9rem;margin-top:1rem}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:.9rem 1rem}
+.card b{color:var(--red)}
+.card .tag{display:inline-block;background:#242450;color:var(--blue);font-size:.7rem;padding:.1rem .5rem;border-radius:6px;margin-bottom:.4rem}
+code{background:#242440;color:#ffd28a;padding:.08rem .35rem;border-radius:5px;font-size:.82rem}
+.note{background:#20203a;border-left:3px solid var(--green);padding:.6rem .9rem;border-radius:8px;margin:.7rem 0;font-size:.86rem;color:var(--muted)}
+.warn{background:#2a1f1f;border-left:3px solid var(--red);padding:.6rem .9rem;border-radius:8px;margin:.7rem 0;font-size:.86rem;color:var(--muted)}
+.legend{display:flex;gap:1.2rem;flex-wrap:wrap;justify-content:center;margin-bottom:1rem;font-size:.8rem;color:var(--muted)}
+.legend span{display:flex;align-items:center;gap:.35rem}
+.dot{width:11px;height:11px;border-radius:50%;display:inline-block}
+.step{counter-reset:none}
+ol{padding-left:1.3rem}
+ol li{margin:.35rem 0}
+table{border-collapse:collapse;width:100%;margin:.8rem 0;font-size:.83rem}
+th,td{border:1px solid var(--border);padding:.45rem .6rem;text-align:left}
+th{background:#242450;color:#ffd0d0}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>Moroccan Legal RAG &mdash; Full Pipeline Flow</h1>
+<p class="sub">End-to-end: ingestion &rarr; storage &rarr; retrieval &rarr; generation &rarr; UI &nbsp;|&nbsp; click the tabs below</p>
+
+<div class="tabs">
+<button class="tab active" data-tab="overview">0 &middot; Overview</button>
+<button class="tab" data-tab="ingest">1 &middot; Ingestion</button>
+<button class="tab" data-tab="query">2 &middot; Query / Hybrid</button>
+<button class="tab" data-tab="crag">3 &middot; Corrective RAG</button>
+<button class="tab" data-tab="gen">4 &middot; Generation</button>
+<button class="tab" data-tab="frontend">5 &middot; Front&harr;Back</button>
+<button class="tab" data-tab="concepts">6 &middot; Key Concepts</button>
+</div>
+
+<!-- ================= OVERVIEW ================= -->
+<div id="overview" class="panel">
+<h2>0 &middot; Big Picture</h2>
+<div class="legend">
+  <span><i class="dot" style="background:#4aa3ff"></i>Offline (ingestion, run once)</span>
+  <span><i class="dot" style="background:#2ecc71"></i>Online (per question)</span>
+  <span><i class="dot" style="background:#ff3b3b"></i>Decision / gate</span>
+</div>
+<div class="mermaid">
+flowchart LR
+  P[PDF / TXT corpus<br/>9 laws] --> ING[INGESTION<br/>chunk + embed]
+  ING --> DB[(PostgreSQL<br/>pgvector HNSW<br/>5844 chunks)]
+  Q[User question] --> RP[Rephrase<br/>Gemini]
+  RP --> HY[Hybrid search<br/>dense + BM25 + RRF]
+  DB --> HY
+  HY --> GATE{best dense<br/>similarity &lt; 0.78?}
+  GATE -- no, strong --> CTX[Context top-k]
+  GATE -- yes, weak --> CRAG[CRAG<br/>adala/ism/web]
+  CRAG --> CTX
+  CTX --> GEN[Generate answer<br/>Gemini + grounding]
+  GEN --> UI[Chat UI<br/>answer + sources]
+</div>
+<div class="note"><b>The one-sentence story:</b> documents are chunked on legal-article boundaries and embedded once; each question is embedded and matched with two complementary retrievers (meaning + exact words), fused by rank, and only if the semantic match is weak do we go out to the web. The answer is generated strictly from the retrieved context with law-qualified citations.</div>
+</div>
+
+<!-- ================= INGESTION ================= -->
+<div id="ingest" class="panel" style="display:none">
+<h2>1 &middot; Ingestion &mdash; Document &rarr; Chunks &rarr; Vectors &rarr; DB</h2>
+<div class="mermaid">
+flowchart TD
+  A["config.py<br/>settings singleton"] --> B["embed.py<br/>load SentenceTransformer<br/>intfloat/multilingual-e5-small (384d)"]
+  C["POST /ingest-all<br/>main.py"] --> D["chunker.pdf_health_check<br/>gate: min chars/chunks,<br/>max avg len, min Arabic %"]
+  D -->|pass| E["chunker.chunk_document"]
+  E --> F["load_document<br/>.pdf / .txt / .html"]
+  F --> G["normalize_arabic<br/>NFKC + RTL number rejoin"]
+  G --> H{"article markers found?<br/>المادة / مادة / الفصل / فصل"}
+  H -- yes --> I["slice marker -> next marker"]
+  I --> J{"> 4000 chars?"}
+  J -- yes --> K["_window(4000, overlap=200)"]
+  J -- no --> L["keep article slice"]
+  H -- no --> M["fixed fallback<br/>chunk_text 100 words, 20% overlap"]
+  K --> N["embed_texts"]
+  L --> N
+  M --> N
+  N --> O["prefix 'passage:'<br/>normalize_embeddings=True<br/>unit vectors"]
+  O --> P["vector_store.insert_chunks<br/>ON CONFLICT (law, article, md5)<br/>DO UPDATE"]
+  P --> Q[(PostgreSQL<br/>documents vector(384)<br/>HNSW index)]
+  P --> R["hybrid.invalidate_cache<br/>rebuild BM25 index + fingerprint"]
+</div>
+<h3>What happens, step by step</h3>
+<ol>
+  <li><b>Load</b> the raw file (<code>.pdf</code> via pdfplumber, <code>.txt</code>/<code>.html</code> direct).</li>
+  <li><b>Health check</b> &ndash; reject broken-font PDFs before they pollute the DB (a common Arabic-PDF trap).</li>
+  <li><b>Normalize Arabic</b> &ndash; unify alef/yaa forms, strip tatweel, fix digits split by RTL rendering (e.g. <code>المادة\n 6</code>).</li>
+  <li><b>Split on article markers</b> &ndash; each <code>المادة N</code> becomes one semantic unit, so citations map cleanly to a chunk.</li>
+  <li><b>Window oversized articles</b> &ndash; anything over 4000 chars is cut with 200-char overlap so no sentence is lost at the seam.</li>
+  <li><b>Embed</b> with the <code>passage:</code> prefix and <b>unit normalization</b> (so cosine = dot product).</li>
+  <li><b>Upsert idempotently</b> &ndash; <code>UNIQUE(law, article, md5(content))</code> means re-ingesting only rewrites changed chunks.</li>
+  <li><b>Invalidate the BM25 cache</b> so the lexical index reflects the new corpus.</li>
+</ol>
+<div class="warn"><b>5,864 vs 5,844:</b> <code>insert_chunks</code> returns <code>len(data)</code> even when rows hit <code>ON CONFLICT DO UPDATE</code>. So the run reports 5,864 attempted rows while the table holds 5,844 distinct chunks. It is a cosmetic reporting mismatch, not data loss.</div>
+</div>
+
+<!-- ================= QUERY ================= -->
+<div id="query" class="panel" style="display:none">
+<h2>2 &middot; Query &mdash; Rephrase &rarr; Hybrid (Dense + BM25) &rarr; Rank Fusion</h2>
+<div class="mermaid">
+flowchart TD
+  U["User question"] --> JS["app.js &rarr; POST /ask<br/>{question, conversation_id}"]
+  JS --> RP["llm.rephrase_query<br/>Gemini #1 (cached)"]
+  JS --> MEM["vector_store.get_messages<br/>memory_turns=6 &rarr; up to 12 msgs"]
+  RP --> RET["retriever.retrieve()"]
+  RET --> HY["hybrid.hybrid_search()"]
+  HY --> DC["dense_candidates<br/>embed_query 'query:'<br/>pgvector &lt;=&gt; operator<br/>1 - distance = cosine<br/>LIMIT 40"]
+  HY --> BM["BM25.scores<br/>k1=1.5, b=0.75<br/>IDF=ln(1+(N-df+0.5)/(df+0.5))"]
+  DC --> DR["dense ranks 1..40"]
+  BM --> BR["BM25 ranks 1..40"]
+  DR --> RRF["RRF fusion<br/>sum of 1/(60 + rank)<br/>w_dense=1.0, w_bm25=0.35"]
+  BR --> RRF
+  RRF --> ADM["OR-admission<br/>sim &ge; 0.78 OR bm25 &ge; 0.6*best_bm25"]
+  ADM --> SRT["sort by RRF desc"]
+  SRT --> CK{"best dense similarity<br/>&lt; 0.78 ?"}
+  CK -- "no (confident)" --> CTX["build context<br/>top 10 chunks"]
+  CK -- "yes (weak)" --> CRG["corrective_search()"]
+  CRG --> CTX
+  CTX --> GA["generate_answer()"]
+</div>
+<h3>Why two retrievers?</h3>
+<table>
+<tr><th>Retriever</th><th>Captures</th><th>Strength</th><th>Weakness</th></tr>
+<tr><td><b>Dense</b> (pgvector)</td><td>Meaning / paraphrase</td><td>"إنهاء عقد" &asymp; "فصل تعسفي"</td><td>Misses exact numbers, rare terms</td></tr>
+<tr><td><b>BM25</b> (lexical)</td><td>Exact words / article numbers</td><td>Find "المادة 60" precisely</td><td>No synonym understanding</td></tr>
+</table>
+<h3>Why RRF (Reciprocal Rank Fusion)?</h3>
+<p>Cosine similarity lives in <code>[0,1]</code>; BM25 is <b>unbounded</b> (can be 0 to 30+). You cannot add or average them fairly. RRF throws away the raw scores and keeps only the <b>rank</b> each document got in each list:</p>
+<p style="text-align:center;margin:.6rem 0"><code>RRF(doc) = w_dense / (k + rank_dense) + w_bm25 / (k + rank_bm25)</code>, with <code>k=60</code>.</p>
+<div class="note"><b>OR-admission (not AND):</b> a chunk is admitted if it is semantically close <b>OR</b> lexically strong. A BM25-only winner has dense similarity 0.0, so an AND rule would silently drop the exact-match hits that BM25 exists to catch.</div>
+<div class="warn"><b>Timing bug to explain:</b> <code>retrieve_ms</code> is measured from the request start to before generation, so it includes rephrase + memory load + retrieval + CRAG. It is mislabelled &mdash; should be split into <code>pre_gen_ms</code> and a true <code>retrieve_ms</code>.</div>
+</div>
+
+<!-- ================= CRAG ================= -->
+<div id="crag" class="panel" style="display:none">
+<h2>3 &middot; Corrective RAG &mdash; fallback only when retrieval is weak</h2>
+<div class="mermaid">
+flowchart TD
+  CK{"corrective gate:<br/>best dense similarity &lt; 0.78"} -- yes --> CR["corrective_search()"]
+  CR --> TRY["try scrapers in order:<br/>adala &rarr; ism &rarr; web"]
+  TRY --> A["scraper.scrape_adala_text<br/>__NEXT_DATA__ parse<br/>+ robots check"]
+  TRY --> I["ism_scraper.scrape_ism_text<br/>list PDFs, topic-map fallback<br/>article_bonus for ordering"]
+  TRY --> W["web_search<br/>.ma allowlist<br/>+ legal-marker filter"]
+  A --> F["_filter_relevant<br/>relevance &ge; 0.25"]
+  I --> F
+  W --> F
+  F --> KEEP{"kept &ge; 1 ?"}
+  KEEP -- yes --> OUT["return set<br/>cap crag_max_chunks=3"]
+  KEEP -- no --> TRY
+</div>
+<h3>Why corrective at all?</h3>
+<p>If the corpus genuinely does not contain the answer (or the wording diverges badly), the top semantic hit is weak. Instead of hallucinating, we go fetch fresh text from trusted Moroccan sources, keep only the relevant fragments, and feed those to the generator.</p>
+<div class="warn"><b>Gate uses best DENSE similarity</b>, <b>not</b> the RRF score. This is deliberate: RRF is a rank-only construct with no absolute scale, so it cannot tell you "how confident" the match is &mdash; cosine can.</div>
+<div class="note"><b>Planned improvement &mdash; source origin:</b> tag each returned source with <code>origin: db | web | commentary</code> and render a badge in the UI, so the user (and the prompt) can treat scraped text as unverified.</div>
+</div>
+
+<!-- ================= GENERATION ================= -->
+<div id="gen" class="panel" style="display:none">
+<h2>4 &middot; Generation &mdash; grounded answer + follow-ups</h2>
+<div class="mermaid">
+flowchart TD
+  CTX["Context: top 10 chunks<br/>format: [law &mdash; المادة N]<br/>content"] --> GA["llm.generate_answer<br/>Gemini #2"]
+  GA --> RULES["Grounding rules in system prompt:<br/>1) answer ONLY from context<br/>2) SUBJECT-MATCH GATE (domain vs subject)<br/>3) ARTICLE IDENTITY (name law + number)<br/>4) cross-domain: never mix laws"]
+  RULES --> ANS["Draft answer<br/>law-qualified citations"]
+  ANS --> SUG["suggested_questions<br/>Gemini #3"]
+  SUG --> SAVE["vector_store.add_message<br/>user + assistant rows"]
+  SAVE --> RES["JSON response<br/>answer, sources, scraped,<br/>suggestions, retriever, timing"]
+</div>
+<table>
+<tr><th>Rule</th><th>Why it exists</th></tr>
+<tr><td>Answer only from context</td><td>Prevents hallucinated law text.</td></tr>
+<tr><td>SUBJECT-MATCH GATE</td><td>Stops a general domain match from answering a specific sub-topic it doesn't cover.</td></tr>
+<tr><td>ARTICLE IDENTITY</td><td>Article numbers are <b>not unique</b> across laws &mdash; 755 of 1,480 numbers appear in &gt;1 law. Citations must name the law.</td></tr>
+<tr><td>Cross-domain guard</td><td>Prevents blending labour law with criminal procedure, etc.</td></tr>
+</table>
+<div class="note"><b>Prompt hardening:</b> conversation history is wrapped in <code>&lt;turn role="..."&gt;</code> tags, truncated, and labelled "reference only"; the system prompt is static so it stays cacheable.</div>
+</div>
+
+<!-- ================= FRONTEND ================= -->
+<div id="frontend" class="panel" style="display:none">
+<h2>5 &middot; Frontend &harr; Backend</h2>
+<div class="mermaid">
+flowchart LR
+  BR["Browser<br/>index.html + style.css + app.js"] --> UI["GET /ui"]
+  BR --> CONV["GET/POST/DELETE /conversations"]
+  BR --> ASK["POST /ask"]
+  UI --> SRV["FastAPI app.main"]
+  CONV --> PG[(PostgreSQL)]
+  ASK --> RP["rephrase"]
+  ASK --> HY["hybrid_search"]
+  ASK --> CRG["corrective (if weak)"]
+  HY --> PG
+  CRG --> WEB["external .ma sources"]
+  RP --> GEM["Gemini"]
+  ASK --> PG
+  ASK --> JSON["JSON response"]
+  JSON --> RENDER["app.js render:<br/>bubbles + sources accordion<br/>+ follow-up chips"]
+  RENDER --> BR
+</div>
+<h3>Endpoints</h3>
+<table>
+<tr><th>Route</th><th>Purpose</th></tr>
+<tr><td><code>GET /ui</code></td><td>Serve the chat page.</td></tr>
+<tr><td><code>POST /ask</code></td><td>Main query: rephrase &rarr; retrieve &rarr; (CRAG) &rarr; generate &rarr; save.</td></tr>
+<tr><td><code>GET /conversations</code></td><td>List conversations.</td></tr>
+<tr><td><code>GET /conversations/{id}</code></td><td>Full transcript (fixed with <code>limit=200</code>).</td></tr>
+<tr><td><code>DELETE /conversations/{id}</code></td><td>Remove a conversation.</td></tr>
+</table>
+<div class="note"><b>Persistence model:</b> transcripts live in PostgreSQL; the browser only stores <code>conversation_id</code> in <code>localStorage</code>. Memory loads up to 12 messages (6 turns).</div>
+</div>
+
+<!-- ================= CONCEPTS ================= -->
+<div id="concepts" class="panel" style="display:none">
+<h2>6 &middot; Key Concepts (interview-ready)</h2>
+<div class="grid">
+  <div class="card"><span class="tag">FUSION</span><b>RRF</b><br>Combines lists by <code>&sum; 1/(k+rank)</code>. Rank-only because cosine [0,1] and BM25 (unbounded) are incomparable.</div>
+  <div class="card"><span class="tag">ADMISSION</span><b>OR-admission</b><br><code>sim&ge;0.78 OR bm25&ge;0.6*best</code>. Keeps BM25-only exact matches that AND would drop.</div>
+  <div class="card"><span class="tag">GATE</span><b>CRAG trigger</b><br>Reads <b>best dense</b> similarity, never the RRF score, because only cosine has an absolute scale.</div>
+  <div class="card"><span class="tag">EMBEDDING</span><b>Asymmetric e5</b><br><code>passage:</code> at ingest, <code>query:</code> at search. Same 384d model, different prefixes.</div>
+  <div class="card"><span class="tag">EMBEDDING</span><b>Unit vectors</b><br><code>normalize_embeddings=True</code> &rarr; &Vert;v&Vert;=1 &rarr; cosine equals dot product.</div>
+  <div class="card"><span class="tag">CHUNKING</span><b>Structure-aware</b><br>Split on article markers; window &gt;4000 chars with 200 overlap; fixed 100-word fallback.</div>
+  <div class="card"><span class="tag">INDEX</span><b>HNSW + pgvector</b><br>Approximate nearest neighbours over 384d; oversample to 40 candidates, let RRF decide final order.</div>
+  <div class="card"><span class="tag">DATA</span><b>Idempotency</b><br><code>UNIQUE(law, article, md5)</code> + <code>ON CONFLICT DO UPDATE</code>; explains the 5,864 vs 5,844 report.</div>
+  <div class="card"><span class="tag">CORPUS</span><b>9 laws, 5,844 chunks</b><br>Admin 1563, obligations 1303, crim. proc. 852, penal 756, labour 590, family 399, consumer 205, press 121, data 55.</div>
+  <div class="card"><span class="tag">CITATIONS</span><b>Article collisions</b><br>755 / 1,480 article numbers appear in &gt;1 law &rarr; citations must be law-qualified.</div>
+  <div class="card"><span class="tag">KNOWN ISSUE</span><b>Lexical mismatch</b><br>&#x627;&#x644;&#x637;&#x631;&#x62f; &#x627;&#x644;&#x62a;&#x639;&#x633;&#x641;&#x64a; &rarr; postal arts 302/303. Needs synonym expansion (&#x637;&#x631;&#x62f; &rarr; &#x641;&#x635;&#x644; &#x62a;&#x639;&#x633;&#x641;&#x64a;).</div>
+  <div class="card"><span class="tag">TIMING</span><b>retrieve_ms</b><br>Currently spans rephrase + memory + retrieval + CRAG &mdash; mislabelled, should be split.</div>
+</div>
+
+<h2>Suggested reading order of the code</h2>
+<div class="mermaid">
+flowchart LR
+  A[config.py] --> B[retrieval/vector_store.py]
+  B --> C[retrieval/embed.py]
+  C --> D[retrieval/tokenize.py]
+  D --> E[ingestion/chunker.py]
+  E --> F[retrieval/search.py]
+  F --> G[retrieval/relevance.py]
+  G --> H[retrieval/hybrid.py]
+  H --> I[retrieval/retriever.py]
+  I --> J[retrieval/robots.py]
+  J --> K[scrapers + corrective.py]
+  K --> L[core/llm.py]
+  L --> M[main.py]
+  M --> N[static/ frontend]
+</div>
+</div>
+
+</div>
+
+<script>
+mermaid.initialize({startOnLoad:false, theme:"dark", securityLevel:"loose", flowchart:{curve:"basis"}});
+const tabs = document.querySelectorAll('.tab');
+function show(id){
+  document.querySelectorAll('.panel').forEach(p => p.style.display = 'none');
+  const el = document.getElementById(id);
+  el.style.display = 'block';
+  const mm = el.querySelectorAll('.mermaid');
+  if(mm.length){ mermaid.run({nodes: mm}); }
+}
+tabs.forEach(btn => {
+  btn.onclick = () => {
+    tabs.forEach(x => x.classList.remove('active'));
+    btn.classList.add('active');
+    show(btn.dataset.tab);
+  };
+});
+show('overview');
+</script>
+</body>
+</html>
