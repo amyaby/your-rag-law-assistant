@@ -1,0 +1,1004 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <title>Moroccan Law Assistant — Two Journeys (POST /ask → answer, PDF → DB)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0b1026;
+      --panel: #10162a;
+      --card: #141b33;
+      --border: #27304f;
+      --text: #e7e9ee;
+      --muted: #9aa3c0;
+      --blue: #7c9cff;
+      --cyan: #22d3ee;
+      --green: #22c55e;
+      --amber: #f59e0b;
+      --orange: #fb923c;
+      --red: #f87171;
+      --violet: #c78bff;
+      --pink: #ff5d8f;
+      --teal: #2fd6a0;
+    }
+
+    * {
+      box-sizing: border-box;
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      color: var(--text);
+      scrollbar-color: rgba(124, 156, 255, .6) transparent;
+      scrollbar-width: thin;
+    }
+
+    body {
+      margin: 0;
+      background: radial-gradient(1200px 800px at 10% -10%, rgba(124, 156, 255, .12), transparent), radial-gradient(900px 700px at 90% -20%, rgba(34, 211, 238, .10), transparent), var(--bg);
+      line-height: 1.7;
+    }
+
+    header {
+      text-align: center;
+      padding: clamp(2rem, 6vw, 4rem) 1rem 1.5rem;
+      display: grid;
+      gap: .8rem;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: clamp(1.8rem, 4vw, 3.2rem);
+      letter-spacing: -.02em;
+    }
+
+    header p {
+      margin: 0;
+      color: var(--muted);
+      font-size: clamp(.98rem, 1.6vw, 1.08rem);
+    }
+
+    header .meta {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: .6rem;
+    }
+
+    header .meta span {
+      display: inline-flex;
+      gap: .4rem;
+      align-items: center;
+      padding: .4rem .8rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(20, 27, 51, .9);
+      font-size: .88rem;
+      color: var(--muted);
+    }
+
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      backdrop-filter: blur(16px);
+      background: linear-gradient(180deg, rgba(11, 16, 38, .98) 0%, rgba(11, 16, 38, .88) 100%);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .nav-inner {
+      margin: 0 auto;
+      max-width: 1500px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: .6rem;
+      justify-content: center;
+      padding: .7rem 1rem;
+    }
+
+    .nav-btn {
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--muted);
+      padding: .5rem .9rem;
+      border-radius: 999px;
+      font-size: .9rem;
+      display: inline-flex;
+      gap: .4rem;
+      align-items: center;
+      cursor: pointer;
+    }
+
+    .nav-btn.active {
+      color: var(--text);
+      border-color: rgba(124, 156, 255, .8);
+      box-shadow: 0 0 0 1px rgba(124, 156, 255, .25);
+      background: radial-gradient(400px 120px at 50% 0%, rgba(124, 156, 255, .22), transparent);
+    }
+
+    main {
+      margin: 0 auto;
+      max-width: 1500px;
+      display: grid;
+      gap: clamp(2rem, 6vw, 4rem);
+      padding: clamp(1rem, 4vw, 2.6rem);
+    }
+
+    .section {
+      display: grid;
+      gap: 1.6rem;
+    }
+
+    .section-header {
+      display: grid;
+      gap: .6rem;
+    }
+
+    .section-header .eyebrow {
+      text-transform: uppercase;
+      letter-spacing: .28em;
+      font-size: .8rem;
+      color: var(--muted);
+    }
+
+    .section-header h2 {
+      margin: 0;
+      font-size: clamp(1.6rem, 3vw, 2.6rem);
+    }
+
+    .section-header p {
+      margin: 0;
+      color: var(--muted);
+      max-width: 980px;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .6rem;
+      align-items: center;
+    }
+
+    .ctrl {
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(20, 27, 51, .9);
+      color: var(--text);
+      padding: .5rem .9rem;
+      font-size: .9rem;
+      display: inline-flex;
+      gap: .4rem;
+      align-items: center;
+      cursor: pointer;
+    }
+
+    .ctrl.primary {
+      border-color: rgba(124, 156, 255, .9);
+      background: radial-gradient(280px 80px at 50% 0%, rgba(124, 156, 255, .28), transparent);
+    }
+
+    .ctrl.active {
+      border-color: rgba(34, 211, 238, .9);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(280px, 380px) minmax(0, 1fr);
+      gap: clamp(1rem, 3vw, 2rem);
+      align-items: start;
+    }
+
+    @media (max-width: 1180px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .timeline {
+      display: grid;
+      gap: .8rem;
+      position: sticky;
+      top: 5.6rem;
+    }
+
+    .step-card {
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(20, 27, 51, .98) 0%, rgba(16, 22, 42, .98) 100%);
+      padding: 1rem 1.1rem;
+      display: grid;
+      gap: .4rem;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .step-card.active {
+      border-color: rgba(124, 156, 255, .9);
+      box-shadow: 0 30px 60px -40px rgba(124, 156, 255, .8);
+    }
+
+    .step-card .top {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+    }
+
+    .step-card .num {
+      font-family: "JetBrains Mono", monospace;
+      color: var(--muted);
+    }
+
+    .step-card .title {
+      font-weight: 600;
+    }
+
+    .step-card .desc {
+      color: var(--muted);
+      font-size: .92rem;
+    }
+
+    .diagram-panel {
+      position: relative;
+      border-radius: 22px;
+      border: 1px solid var(--border);
+      background: radial-gradient(900px 600px at 50% 0%, rgba(124, 156, 255, .14), transparent), linear-gradient(180deg, rgba(20, 27, 51, .98) 0%, rgba(12, 17, 36, .98) 100%);
+      overflow: hidden;
+      min-height: 760px;
+    }
+
+    .diagram-header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 1.2rem 1.8rem 0;
+    }
+
+    .diagram-header .title-group {
+      display: grid;
+      gap: .4rem;
+    }
+
+    .diagram-header .eyebrow {
+      text-transform: uppercase;
+      letter-spacing: .24em;
+      font-size: .78rem;
+      color: var(--muted);
+    }
+
+    .diagram-header h3 {
+      margin: 0;
+      font-size: clamp(1.2rem, 2vw, 1.8rem);
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .6rem;
+      align-items: center;
+      color: var(--muted);
+    }
+
+    .legend-item {
+      display: inline-flex;
+      gap: .4rem;
+      align-items: center;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    .dot.req {
+      background: var(--blue);
+      box-shadow: 0 0 0 6px rgba(124, 156, 255, .12);
+    }
+
+    .dot.res {
+      background: var(--green);
+      box-shadow: 0 0 0 6px rgba(34, 197, 94, .12);
+    }
+
+    .dot.sql {
+      background: var(--amber);
+      box-shadow: 0 0 0 6px rgba(245, 158, 11, .12);
+    }
+
+    .dot.net {
+      background: var(--red);
+      box-shadow: 0 0 0 6px rgba(248, 113, 113, .12);
+    }
+
+    .dot.embed {
+      background: var(--violet);
+      box-shadow: 0 0 0 6px rgba(199, 139, 255, .12);
+    }
+
+    .dot.file {
+      background: var(--cyan);
+      box-shadow: 0 0 0 6px rgba(34, 211, 238, .12);
+    }
+
+    svg.diagram {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    .actor {
+      fill: url(#actorGrad);
+      stroke: rgba(124, 156, 255, .6);
+      stroke-width: 1.2;
+    }
+
+    .actor-label {
+      text-anchor: middle;
+      font-weight: 600;
+    }
+
+    .actor-sub {
+      text-anchor: middle;
+      fill: var(--muted);
+      font-size: 12px;
+    }
+
+    .lane {
+      stroke: rgba(39, 48, 79, .9);
+      stroke-width: 1;
+    }
+
+    .wire {
+      stroke: rgba(154, 163, 192, .4);
+      stroke-width: 2;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .wire.req {
+      stroke: var(--blue);
+    }
+
+    .wire.res {
+      stroke: var(--green);
+    }
+
+    .wire.sql {
+      stroke: var(--amber);
+    }
+
+    .wire.net {
+      stroke: var(--red);
+    }
+
+    .wire.embed {
+      stroke: var(--violet);
+    }
+
+    .wire.file {
+      stroke: var(--cyan);
+    }
+
+    .pkt {
+      filter: drop-shadow(0 0 14px currentColor);
+      opacity: 0;
+    }
+
+    .pkt.active {
+      opacity: 1;
+    }
+
+    .note {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: 1.4rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(16, 22, 42, .95);
+      padding: .5rem 1rem;
+      color: var(--muted);
+      font-size: .9rem;
+      text-align: center;
+      max-width: min(1100px, calc(100% - 2rem));
+    }
+
+    .details-grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: clamp(1rem, 2vw, 1.6rem);
+    }
+
+    .detail-card {
+      grid-column: 1 / -1;
+      border-radius: 18px;
+      border: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(20, 27, 51, .98) 0%, rgba(16, 22, 42, .98) 100%);
+      overflow: hidden;
+      display: grid;
+      gap: 1rem;
+    }
+
+    .detail-card header {
+      text-align: left;
+      padding: 1.4rem 1.8rem 0;
+      gap: .4rem;
+    }
+
+    .detail-card header .eyebrow {
+      text-transform: uppercase;
+      letter-spacing: .24em;
+      font-size: .78rem;
+      color: var(--muted);
+    }
+
+    .detail-card header h3 {
+      margin: 0;
+      font-size: clamp(1.1rem, 2vw, 1.6rem);
+    }
+
+    .detail-body {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 1rem;
+      padding: 0 1.8rem 1.8rem;
+    }
+
+    .list {
+      grid-column: 1 / 7;
+      display: grid;
+      gap: .8rem;
+    }
+
+    @media (max-width: 1080px) {
+      .list {
+        grid-column: 1 / -1;
+      }
+    }
+
+    .item {
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      padding: .9rem 1rem;
+      display: grid;
+      gap: .3rem;
+    }
+
+    .item .head {
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .item .file {
+      font-family: "JetBrains Mono", monospace;
+      color: var(--cyan);
+      font-size: .88rem;
+    }
+
+    .item .fn {
+      font-family: "JetBrains Mono", monospace;
+      color: var(--muted);
+    }
+
+    .item p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .code-block {
+      grid-column: 7 / -1;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: radial-gradient(600px 400px at 50% 0%, rgba(124, 156, 255, .12), transparent), #0f152b;
+      overflow: auto;
+    }
+
+    @media (max-width: 1080px) {
+      .code-block {
+        grid-column: 1 / -1;
+      }
+    }
+
+    .code-block pre {
+      margin: 0;
+      padding: 1rem 1.2rem;
+      font-family: "JetBrains Mono", monospace;
+      font-size: .86rem;
+      line-height: 1.9;
+      color: var(--muted);
+    }
+
+    .code-block .key {
+      color: var(--cyan);
+    }
+
+    .code-block .str {
+      color: var(--teal);
+    }
+
+    .code-block .num {
+      color: var(--amber);
+    }
+
+    .code-block .fn {
+      color: var(--violet);
+    }
+
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+
+<body>
+  <svg width="0" height="0" style="position:absolute">
+    <defs>
+      <linearGradient id="actorGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="rgba(124,156,255,.28)" />
+        <stop offset="100%" stop-color="rgba(20,27,51,.98)" />
+      </linearGradient>
+      <marker id="arr" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+        <polygon points="0 0, 10 3.5, 0 7" fill="var(--blue)" />
+      </marker>
+      <marker id="arrg" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+        <polygon points="0 0, 10 3.5, 0 7" fill="var(--green)" />
+      </marker>
+      <marker id="arrn" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+        <polygon points="0 0, 10 3.5, 0 7" fill="var(--red)" />
+      </marker>
+      <marker id="arrs" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+        <polygon points="0 0, 10 3.5, 0 7" fill="var(--amber)" />
+      </marker>
+      <marker id="arre" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+        <polygon points="0 0, 10 3.5, 0 7" fill="var(--violet)" />
+      </marker>
+      <marker id="arrc" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+        <polygon points="0 0, 10 3.5, 0 7" fill="var(--cyan)" />
+      </marker>
+    </defs>
+  </svg>
+
+  <header>
+    <div class="meta">
+      <span>FastAPI</span>
+      <span>Postgres + pgvector</span>
+      <span>SentenceTransformer (multilingual-e5-small)</span>
+      <span>Gemini + retry/fallback</span>
+      <span>BM25 + RRF</span>
+      <span>CRAG</span>
+    </div>
+    <h1>Two Complete Journeys, Explained Step by Step</h1>
+    <p>1) POST /ask → final answer · 2) PDF extraction → database record. Grounded in the actual codebase.</p>
+  </header>
+
+  <nav>
+    <div class="nav-inner">
+      <button class="nav-btn active" data-target="ask">Act 1 · POST /ask → final answer</button>
+      <button class="nav-btn" data-target="ingest">Act 2 · PDF → database record</button>
+      <button class="nav-btn" data-target="takeaways">Interview Takeaways</button>
+    </div>
+  </nav>
+
+  <main>
+    <section class="section" id="ask">
+      <div class="section-header">
+        <span class="eyebrow">Act 1</span>
+        <h2>POST /ask → final answer</h2>
+        <p>Rephrase (if Latin/Arabizi), load memory, hybrid retrieval (dense + BM25 → RRF, OR admission), CRAG if best dense < 0.78, build context, prompt with history, generate with fallback models, persist turn, return answer + sources.</p>
+        <div class="controls">
+          <button class="ctrl primary" id="ask-play">▶ Play</button>
+          <button class="ctrl" id="ask-pause">⏸ Pause</button>
+          <button class="ctrl" id="ask-reset">↺ Replay</button>
+          <button class="ctrl" id="ask-next">Next step →</button>
+          <span class="ctrl" style="pointer-events:none">Step <span id="ask-step">0</span> / 16</span>
+        </div>
+      </div>
+      <div class="grid">
+        <aside class="timeline" id="ask-timeline"></aside>
+        <div class="diagram-panel">
+          <div class="diagram-header">
+            <div class="title-group">
+              <span class="eyebrow">Animated flow</span>
+              <h3>Request → Retrieval → CRAG → LLM → Persistence</h3>
+            </div>
+            <div class="legend">
+              <div class="legend-item"><span class="dot req"></span>request</div>
+              <div class="legend-item"><span class="dot embed"></span>embedding</div>
+              <div class="legend-item"><span class="dot sql"></span>SQL / DB</div>
+              <div class="legend-item"><span class="dot net"></span>network (Gemini/CRAG)</div>
+              <div class="legend-item"><span class="dot res"></span>response</div>
+            </div>
+          </div>
+          <svg class="diagram" viewBox="0 0 1400 780" id="ask-svg">
+            <g>
+              <rect class="actor" x="40" y="40" width="150" height="70" rx="12" />
+              <text class="actor-label" x="115" y="72">Client / UI</text>
+              <text class="actor-sub" x="115" y="92">static/app.js</text>
+            </g>
+            <g>
+              <rect class="actor" x="320" y="40" width="150" height="70" rx="12" />
+              <text class="actor-label" x="395" y="72">FastAPI</text>
+              <text class="actor-sub" x="395" y="92">app/main.py:183</text>
+            </g>
+            <g>
+              <rect class="actor" x="620" y="40" width="150" height="70" rx="12" />
+              <text class="actor-label" x="695" y="72">LLM</text>
+              <text class="actor-sub" x="695" y="92">app/core/llm.py</text>
+            </g>
+            <g>
+              <rect class="actor" x="920" y="40" width="150" height="70" rx="12" />
+              <text class="actor-label" x="995" y="72">Retriever</text>
+              <text class="actor-sub" x="995" y="92">hybrid.py + search.py</text>
+            </g>
+            <g>
+              <rect class="actor" x="1220" y="40" width="150" height="70" rx="12" />
+              <text class="actor-label" x="1295" y="72">Postgres + pgvector</text>
+              <text class="actor-sub" x="1295" y="92">documents/conversations/messages</text>
+            </g>
+            <g>
+              <rect class="actor" x="620" y="640" width="150" height="70" rx="12" />
+              <text class="actor-label" x="695" y="672">CRAG</text>
+              <text class="actor-sub" x="695" y="692">adala/ism/web_search</text>
+            </g>
+            <line class="lane" x1="115" y1="110" x2="115" y2="720" />
+            <line class="lane" x1="395" y1="110" x2="395" y2="720" />
+            <line class="lane" x1="695" y1="110" x2="695" y2="720" />
+            <line class="lane" x1="995" y1="110" x2="995" y2="720" />
+            <line class="lane" x1="1295" y1="110" x2="1295" y2="720" />
+            <path id="a1" class="wire req" d="M115 150 L395 150" marker-end="url(#arr)" />
+            <path id="a2" class="wire net" d="M395 190 L695 190" marker-end="url(#arrn)" />
+            <path id="a3" class="wire sql" d="M395 230 L1295 230" marker-end="url(#arrs)" />
+            <path id="a4" class="wire embed" d="M395 270 L995 270 L995 310" marker-end="url(#arre)" />
+            <path id="a5" class="wire sql" d="M995 350 L1295 350" marker-end="url(#arrs)" />
+            <path id="a6" class="wire res" d="M1295 390 L995 390" marker-end="url(#arrg)" />
+            <path id="a7" class="wire req" d="M995 430 L695 430 L695 640" marker-end="url(#arr)" />
+            <path id="a8" class="wire net" d="M695 600 L395 520" marker-end="url(#arrn)" />
+            <path id="a9" class="wire req" d="M395 560 L695 560" marker-end="url(#arr)" />
+            <path id="a10" class="wire net" d="M695 520 L395 480" marker-end="url(#arrn)" />
+            <path id="a11" class="wire sql" d="M395 620 L1295 620" marker-end="url(#arrs)" />
+            <path id="a12" class="wire sql" d="M395 660 L1295 660" marker-end="url(#arrs)" />
+            <path id="a13" class="wire res" d="M395 700 L115 700" marker-end="url(#arrg)" />
+            <circle class="pkt req" r="6" style="color:var(--blue)"><animateMotion dur=".9s" repeatCount="1" fill="freeze"><mpath href="#a1" /></animateMotion></circle>
+            <circle class="pkt net" r="6" style="color:var(--red)"><animateMotion dur=".9s" repeatCount="1" fill="freeze"><mpath href="#a2" /></animateMotion></circle>
+            <circle class="pkt sql" r="6" style="color:var(--amber)"><animateMotion dur=".9s" repeatCount="1" fill="freeze"><mpath href="#a3" /></animateMotion></circle>
+            <circle class="pkt embed" r="6" style="color:var(--violet)"><animateMotion dur="1s" repeatCount="1" fill="freeze"><mpath href="#a4" /></animateMotion></circle>
+            <circle class="pkt sql" r="6" style="color:var(--amber)"><animateMotion dur=".9s" repeatCount="1" fill="freeze"><mpath href="#a5" /></animateMotion></circle>
+            <circle class="pkt res" r="6" style="color:var(--green)"><animateMotion dur=".9s" repeatCount="1" fill="freeze"><mpath href="#a6" /></animateMotion></circle>
+            <circle class="pkt net" r="6" style="color:var(--red)"><animateMotion dur="1s" repeatCount="1" fill="freeze"><mpath href="#a7" /></animateMotion></circle>
+            <circle class="pkt res" r="6" style="color:var(--green)"><animateMotion dur=".9s" repeatCount="1" fill="freeze"><mpath href="#a8" /></animateMotion></circle>
+            <circle class="pkt net" r="6" style="color:var(--red)"><animateMotion dur=".9s" repeatCount="1" fill="freeze"><mpath href="#a9" /></animateMotion></circle>
+            <circle class="pkt res" r="6" style="color:var(--green)"><animateMotion dur=".9s" repeatCount="1" fill="freeze"><mpath href="#a10" /></animateMotion></circle>
+            <circle class="pkt sql" r="6" style="color:var(--amber)"><animateMotion dur=".9s" repeatCount="1" fill="freeze"><mpath href="#a11" /></animateMotion></circle>
+            <circle class="pkt sql" r="6" style="color:var(--amber)"><animateMotion dur=".9s" repeatCount="1" fill="freeze"><mpath href="#a12" /></animateMotion></circle>
+            <circle class="pkt res" r="6" style="color:var(--green)"><animateMotion dur=".9s" repeatCount="1" fill="freeze"><mpath href="#a13" /></animateMotion></circle>
+            <text x="255" y="142" fill="var(--muted)" font-size="12">POST /ask {question, conversation_id}</text>
+            <text x="545" y="182" fill="var(--muted)" font-size="12">rephrase_query()</text>
+            <text x="830" y="222" fill="var(--muted)" font-size="12">load memory: conversation_exists + get_messages(limit=12)</text>
+            <text x="660" y="262" fill="var(--muted)" font-size="12">retrieve(search_query) → hybrid_search</text>
+            <text x="1080" y="342" fill="var(--muted)" font-size="12">SELECT dense (vector) + BM25 over 5844, fuse RRF</text>
+            <text x="1080" y="382" fill="var(--muted)" font-size="12">results + retriever="hybrid_bm25_rrf"</text>
+            <text x="800" y="422" fill="var(--muted)" font-size="12">crag_needed? best_dense < 0.78</text>
+            <text x="540" y="590" fill="var(--muted)" font-size="12">corrective_search: adala→ism→web + relevance gate</text>
+            <text x="540" y="552" fill="var(--muted)" font-size="12">merge scraped + db, cap to context_max_chunks=10</text>
+            <text x="540" y="512" fill="var(--muted)" font-size="12">generate_answer(q, context, history) + retry/fallback</text>
+            <text x="830" y="612" fill="var(--muted)" font-size="12">if new conv → create_conversation</text>
+            <text x="830" y="652" fill="var(--muted)" font-size="12">add_message(user), add_message(assistant)</text>
+            <text x="255" y="692" fill="var(--muted)" font-size="12">{answer, sources, scraped, suggestions, conversation_id}</text>
+          </svg>
+          <div class="note">Each packet is one hop; SQL is amber, network (Gemini/CRAG) is red, embeddings purple, responses green.</div>
+        </div>
+      </div>
+      <section class="details-grid">
+        <article class="detail-card">
+          <header>
+            <span class="eyebrow">Step-by-step details</span>
+            <h3>POST /ask internals</h3>
+          </header>
+          <div class="detail-body">
+            <div class="list" id="ask-details"></div>
+            <div class="code-block">
+              <pre><span class="key"># app/main.py:183-269 (key parts)</span>
+<span class="fn">search_query</span> = <span class="fn">rephrase_query</span>(req.question)  <span class="num"># 202</span>
+<span class="fn">history</span> = <span class="fn">get_messages</span>(cid, limit=<span class="fn">memory_turns</span>*<span class="num">2</span>) <span class="num"># 208</span>
+<span class="fn">results</span>, <span class="fn">retriever</span> = <span class="fn">retrieve</span>(search_query) <span class="num"># 211</span>
+<span class="fn">needs_scrape</span> = <span class="fn">crag_needed</span>(results) <span class="num"># 213</span>  <span class="comment"># best_dense < 0.78</span>
+if needs_scrape: <span class="fn">scraped</span> = <span class="fn">corrective_search</span>(..., max_chunks=<span class="fn">crag_max_chunks</span>)
+results = scraped + results; results = results[:<span class="fn">context_max_chunks</span>]
+<span class="fn">answer</span> = <span class="fn">generate_answer</span>(req.question, context, history=history)
+<span class="fn">suggestions</span> = <span class="fn">generate_suggestions</span>(req.question, context)
+if cid: <span class="fn">create_conversation</span> if missing; <span class="fn">add_message</span>(user, assistant)</pre>
+            </div>
+          </div>
+        </article>
+      </section>
+    </section>
+
+    <section class="section hidden" id="ingest">
+      <div class="section-header">
+        <span class="eyebrow">Act 2</span>
+        <h2>PDF extraction → database record</h2>
+        <p>Load (PyMuPDF/html/txt), normalize + repair split article numbers, structure-aware article splitting, window long articles to 4000/200 chars, health gate, embed with <code>passage:</code>, upsert with <code>ON CONFLICT (law, article, md5(content)) DO UPDATE</code>, invalidate BM25 cache.</p>
+        <div class="controls">
+          <button class="ctrl primary" id="ing-play">▶ Play</button>
+          <button class="ctrl" id="ing-pause">⏸ Pause</button>
+          <button class="ctrl" id="ing-reset">↺ Replay</button>
+          <button class="ctrl" id="ing-next">Next step →</button>
+          <span class="ctrl" style="pointer-events:none">Step <span id="ing-step">0</span> / 14</span>
+        </div>
+      </div>
+      <div class="grid">
+        <aside class="timeline" id="ing-timeline"></aside>
+        <div class="diagram-panel">
+          <div class="diagram-header">
+            <div class="title-group">
+              <span class="eyebrow">Animated flow</span>
+              <h3>File system → chunker → embed → Postgres</h3>
+            </div>
+            <div class="legend">
+              <div class="legend-item"><span class="dot file"></span>file I/O</div>
+              <div class="legend-item"><span class="dot embed"></span>embedding</div>
+              <div class="legend-item"><span class="dot sql"></span>SQL / DB</div>
+              <div class="legend-item"><span class="dot res"></span>result</div>
+            </div>
+          </div>
+          <svg class="diagram" viewBox="0 0 1400 760" id="ing-svg">
+            <g>
+              <rect class="actor" x="40" y="40" width="150" height="70" rx="12" />
+              <text class="actor-label" x="115" y="72">data/docs/*.pdf|txt|html</text>
+              <text class="actor-sub" x="115" y="92">disk</text>
+            </g>
+            <g>
+              <rect class="actor" x="320" y="40" width="150" height="70" rx="12" />
+              <text class="actor-label" x="395" y="72">FastAPI ingest</text>
+              <text class="actor-sub" x="395" y="92">/ingest or /ingest-all</text>
+            </g>
+            <g>
+              <rect class="actor" x="620" y="40" width="150" height="70" rx="12" />
+              <text class="actor-label" x="695" y="72">Chunker</text>
+              <text class="actor-sub" x="695" y="92">chunker.py</text>
+            </g>
+            <g>
+              <rect class="actor" x="920" y="40" width="150" height="70" rx="12" />
+              <text class="actor-label" x="995" y="72">Embedder</text>
+              <text class="actor-sub" x="995" y="92">core/embed.py</text>
+            </g>
+            <g>
+              <rect class="actor" x="1220" y="40" width="150" height="70" rx="12" />
+              <text class="actor-label" x="1295" y="72">Postgres + pgvector</text>
+              <text class="actor-sub" x="1295" y="92">documents</text>
+            </g>
+            <line class="lane" x1="115" y1="110" x2="115" y2="700" />
+            <line class="lane" x1="395" y1="110" x2="395" y2="700" />
+            <line class="lane" x1="695" y1="110" x2="695" y2="700" />
+            <line class="lane" x1="995" y1="110" x2="995" y2="700" />
+            <line class="lane" x1="1295" y1="110" x2="1295" y2="700" />
+            <path id="i1" class="wire file" d="M115 150 L395 150" marker-end="url(#arrc)" />
+            <path id="i2" class="wire file" d="M395 190 L695 190" marker-end="url(#arrc)" />
+            <path id="i3" class="wire req" d="M695 230 L695 270" marker-end="url(#arr)" />
+            <path id="i4" class="wire req" d="M695 310 L695 350" marker-end="url(#arr)" />
+            <path id="i5" class="wire req" d="M695 390 L695 430" marker-end="url(#arr)" />
+            <path id="i6" class="wire embed" d="M695 470 L995 470" marker-end="url(#arre)" />
+            <path id="i7" class="wire sql" d="M995 510 L1295 510" marker-end="url(#arrs)" />
+            <path id="i8" class="wire res" d="M1295 550 L995 550" marker-end="url(#arrg)" />
+            <path id="i9" class="wire res" d="M995 590 L395 590" marker-end="url(#arrg)" />
+            <path id="i10" class="wire res" d="M395 630 L115 630" marker-end="url(#arrg)" />
+            <circle class="pkt file" r="6" style="color:var(--cyan)"><animateMotion dur=".8s" repeatCount="1" fill="freeze"><mpath href="#i1" /></animateMotion></circle>
+            <circle class="pkt file" r="6" style="color:var(--cyan)"><animateMotion dur=".8s" repeatCount="1" fill="freeze"><mpath href="#i2" /></animateMotion></circle>
+            <circle class="pkt req" r="6" style="color:var(--blue)"><animateMotion dur=".7s" repeatCount="1" fill="freeze"><mpath href="#i3" /></animateMotion></circle>
+            <circle class="pkt req" r="6" style="color:var(--blue)"><animateMotion dur=".7s" repeatCount="1" fill="freeze"><mpath href="#i4" /></animateMotion></circle>
+            <circle class="pkt req" r="6" style="color:var(--blue)"><animateMotion dur=".7s" repeatCount="1" fill="freeze"><mpath href="#i5" /></animateMotion></circle>
+            <circle class="pkt embed" r="6" style="color:var(--violet)"><animateMotion dur=".9s" repeatCount="1" fill="freeze"><mpath href="#i6" /></animateMotion></circle>
+            <circle class="pkt sql" r="6" style="color:var(--amber)"><animateMotion dur=".9s" repeatCount="1" fill="freeze"><mpath href="#i7" /></animateMotion></circle>
+            <circle class="pkt res" r="6" style="color:var(--green)"><animateMotion dur=".8s" repeatCount="1" fill="freeze"><mpath href="#i8" /></animateMotion></circle>
+            <circle class="pkt res" r="6" style="color:var(--green)"><animateMotion dur=".8s" repeatCount="1" fill="freeze"><mpath href="#i9" /></animateMotion></circle>
+            <circle class="pkt res" r="6" style="color:var(--green)"><animateMotion dur=".8s" repeatCount="1" fill="freeze"><mpath href="#i10" /></animateMotion></circle>
+            <text x="255" y="142" fill="var(--muted)" font-size="12">read file (exists check)</text>
+            <text x="545" y="182" fill="var(--muted)" font-size="12">pdf_health_check() gate</text>
+            <text x="720" y="265" fill="var(--muted)" font-size="12">load_pdf / load_text_document → join pages</text>
+            <text x="720" y="345" fill="var(--muted)" font-size="12">normalize_arabic + repair split article numbers</text>
+            <text x="720" y="425" fill="var(--muted)" font-size="12">article_chunks() regex → windows 4000/200 or fallback</text>
+            <text x="830" y="462" fill="var(--muted)" font-size="12">embed_texts([c.content]) with "passage: " + NFKC</text>
+            <text x="1120" y="502" fill="var(--muted)" font-size="12">INSERT ... ON CONFLICT (law,article,md5) DO UPDATE</text>
+            <text x="1120" y="542" fill="var(--muted)" font-size="12">row(id, content, embedding vector(384), law, article, source)</text>
+            <text x="830" y="582" fill="var(--muted)" font-size="12">invalidate_cache() (BM25 fingerprint)</text>
+            <text x="545" y="622" fill="var(--muted)" font-size="12">{status:'ok', chunks: written}</text>
+          </svg>
+          <div class="note">Windows: _window uses character splits (broken RTL). Only first 512 tokens embedded by e5-small.</div>
+        </div>
+      </div>
+      <section class="details-grid">
+        <article class="detail-card">
+          <header>
+            <span class="eyebrow">Step-by-step details</span>
+            <h3>PDF → DB record internals</h3>
+          </header>
+          <div class="detail-body">
+            <div class="list" id="ing-details"></div>
+            <div class="code-block">
+              <pre><span class="key"># app/ingestion/chunker.py + app/core/embed.py + app/retrieval/vector_store.py</span>
+<span class="fn">load_pdf</span> → fitz.open().get_text() per page
+<span class="fn">normalize_arabic</span> → NFKC + fix "الفصل 1\n-\n447" → "الفصل 447-1"
+<span class="fn">article_chunks</span>: AR_ARTICLE ^\s*(?:المادة|مادة|الفصل|فصل)\s*([\d\-\.]+|ordinals) OR FR_ARTICLE
+if no markers: <span class="fn">chunk_text</span>(100,20) article=""
+for long slice: <span class="fn">_window</span>(text, <span class="fn">max_article_chars</span>=<span class="num">4000</span>, <span class="num">200</span>)
+<span class="fn">embed_texts</span>: ["passage: "+normalize_arabic(t) ...], model.encode(..., normalize_embeddings=True)
+<span class="fn">insert_chunks</span>: INSERT ... VALUES (..., %s::vector, ...) ON CONFLICT (law,article,md5(content)) DO UPDATE
+CREATE UNIQUE INDEX documents_identity (law,article,md5(content))</pre>
+            </div>
+          </div>
+        </article>
+      </section>
+    </section>
+
+    <section class="section hidden" id="takeaways">
+      <div class="section-header">
+        <span class="eyebrow">Interview</span>
+        <h2>Key points to say confidently</h2>
+        <p>Precise answers for the two journeys.</p>
+      </div>
+      <div class="details-grid">
+        <article class="detail-card">
+          <header>
+            <span class="eyebrow">Ask journey</span>
+            <h3>Critical details</h3>
+          </header>
+          <div class="detail-body">
+            <div class="list">
+              <div class="item"><div class="head"><span class="title">Rephrase rule</span><span class="file">llm.py:157</span></div><p>If query has Arabic script → return unchanged. Else use Gemini to get formal Arabic search keywords, cached in-memory.</p></div>
+              <div class="item"><div class="head"><span class="title">Memory</span><span class="file">main.py:206-208, llm.py:347</span></div><p>Load last 12 messages from DB if conversation_id exists; inject last 6 into prompt as &lt;turn role=...&gt;. User turn saved before assistant? No: load before generation, then add_message(user) then add_message(assistant) at end. History bug: slice [-memory_turns:] = 6, not 12.</p></div>
+              <div class="item"><div class="head"><span class="title">Retrieval</span><span class="file">retriever.py:25, hybrid.py</span></div><p>Single entry point uses hybrid by default. Dense 40 + BM25 40 → RRF with w_dense=1.0, w_bm25=0.35, k=60. Admission OR: similarity >= 0.78 or bm25 >= 0.6*best_bm25. Sort by (rrf_score, boosted_score).</p></div>
+              <div class="item"><div class="head"><span class="title">CRAG</span><span class="file">retriever.py:41, corrective.py</span></div><p>Fires if best_dense &lt; 0.78 (uses dense, not RRF). Chain adala→ism→web; each chunk scored by relevance, threshold crag_min_relevance. Empty allowed → caller reports no source.</p></div>
+              <div class="item"><div class="head"><span class="title">LLM</span><span class="file">llm.py:106</span></div><p>Nested retry: for each model, up to llm_max_attempts with exponential backoff; 400/404/403 treated fatal → switch model; retryable 429/5xx/timeouts. History rendered to prompt, not chats API.</p></div>
+              <div class="item"><div class="head"><span class="title">Persistence</span><span class="file">vector_store.py:207, main.py:250-255</span></div><p>If new conversation_id, create_conversation with truncated title; add_message(user), add_message(assistant). Title updated on first user message to first 48 chars.</p></div>
+            </div>
+            <div class="code-block">
+              <pre><span class="key">Response shape (main.py:262-269)</span>
+{
+  <span class="str">"answer"</span>: str,
+  <span class="str">"sources"</span>: results,        <span class="comment">// includes law/article/content/sim/dense_rank/bm25_rank/rrf_score/via</span>
+  <span class="str">"scraped"</span>: bool,
+  <span class="str">"suggestions"</span>: [...],
+  <span class="str">"conversation_id"</span>: cid,
+  <span class="str">"retriever"</span>: "hybrid_bm25_rrf" | "dense_boost"
+}</pre>
+            </div>
+          </div>
+        </article>
+        <article class="detail-card">
+          <header>
+            <span class="eyebrow">Ingest journey</span>
+            <h3>Critical details</h3>
+          </header>
+          <div class="detail-body">
+            <div class="list">
+              <div class="item"><div class="head"><span class="title">Health gate</span><span class="file">chunker.py:259</span></div><p>Reject if &lt;20k chars, &lt;15 chunks, avg&gt;2500, or &lt;50% chunks have article. Prevents garbage blobs.</p></div>
+              <div class="item"><div class="head"><span class="title">Article-aware</span><span class="file">chunker.py:19,153</span></div><p>Regex ^المادة|مادة|الفصل|فصل + number/ordinals; French only if no Arabic. One article = unit; long articles windowed character-wise (4000/200).</p></div>
+              <div class="item"><div class="head"><span class="title">Repair</span><span class="file">chunker.py:40-48</span></div><p>Fix split numbers across newlines (only when newline between halves) — avoids corrupting correct "447-1".</p></div>
+              <div class="item"><div class="head"><span class="title">Embedding</span><span class="file">embed.py:21,34</span></div><p>passage: for docs, query: for questions. Same model, L2 normalized, 384-d. Truncation at 512 tokens; 121/5844 chunks &gt;~512 tokens.</p></div>
+              <div class="item"><div class="head"><span class="title">Idempotency</span><span class="file">vector_store.py:69,142</span></div><p>UNIQUE INDEX (law, article, md5(content)) + ON CONFLICT DO UPDATE embedding/source. Re-ingest safe; BM25 cache invalidated.</p></div>
+              <div class="item"><div class="head"><span class="title">DB shape</span><span class="file">vector_store.py:49-112</span></div><p>documents(id, content, embedding vector(384), law, article, source, version). conversations(id TEXT PK, title, created_at). messages(id SERIAL, conversation_id FK ON DELETE CASCADE, role, content, created_at). Index (conversation_id,id).</p></div>
+            </div>
+            <div class="code-block">
+              <pre><span class="key">Measurements (live)</span>
+chunks: <span class="num">5844</span>, laws: <span class="num">9</span>, dims: <span class="num">384</span>
+conversations: <span class="num">2</span>, messages: <span class="num">76</span>
+indexes: documents_pkey, documents_identity, conversations_pkey, messages_pkey, messages_conversation_idx
+max chunk: <span class="num">4000</span> chars = <span class="num">1133</span> tokens (&gt;512) — truncation
+chunks &gt;1800 chars: <span class="num">121</span> (likely &gt;512 tokens), exact 4000: <span class="num">31</span></pre>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const askSteps = [
+      { n: 1, title: "Client POST /ask", desc: "UI sends {question, conversation_id} to FastAPI.", file: "static/app.js / main.py:50-55" },
+      { n: 2, title: "Rephrase query", desc: "If Arabic script → unchanged; else Gemini rewrites to formal Arabic keywords (cached).", file: "llm.py:157-187" },
+      { n: 3, title: "Load memory", desc: "If conversation exists → get_messages(cid, limit=12).", file: "main.py:206-208, vector_store.py:189" },
+      { n: 4, title: "Retrieve", desc: "retrieve(search_query) → hybrid_search. Dense candidates 40, BM25 40.", file: "retriever.py:25, hybrid.py:135-149" },
+      { n: 5, title: "Embed query", desc: "embed_one/Query adds 'query:' prefix, L2 normalized, 384-d.", file: "embed.py:34-46" },
+      { n: 6, title: "Fuse RRF", desc: "Compute RRF per doc: sum w/(k+rank), k=60, w_dense=1.0, w_bm25=0.35.", file: "hybrid.py:167-173" },
+      { n: 7, title: "DB fetch", desc: "Dense via pgvector <=>, BM25 over full corpus index. Merge results.", file: "hybrid.py:148-195, vector_store.py" },
+      { n: 8, title: "Admission + rank", desc: "OR: sim>=0.78 or bm25>=0.6*best_bm25. Sort by (rrf_score, score).", file: "hybrid.py:201-229" },
+      { n: 9, title: "CRAG check", desc: "crag_needed: best_dense < 0.78?", file: "retriever.py:41-52" },
+      { n: 10, title: "Corrective search", desc: "If yes: try adala→ism→web, filter by relevance (threshold), prepend kept.", file: "corrective.py:62-118" },
+      { n: 11, title: "Build context", desc: "Format [Law — المادة X] and join; cap to context_max_chunks=10.", file: "main.py:230-228" },
+      { n: 12, title: "Generate answer", desc: "generate_answer with history, system instruction, grounding rules. Retry/fallback.", file: "llm.py:372-389, main.py:246" },
+      { n: 13, title: "Suggestions", desc: "generate_suggestions from question+context.", file: "llm.py:191-217" },
+      { n: 14, title: "Persist turn", desc: "Ensure conversation exists, add_message(user), add_message(assistant).", file: "main.py:250-255, vector_store.py:207-224" },
+      { n: 15, title: "Log", desc: "Structured log with retriever/hits/top_similarity/scraped/history_turns/ms.", file: "main.py:256-260" },
+      { n: 16, title: "Return response", desc: "{answer, sources, scraped, suggestions, conversation_id, retriever}", file: "main.py:262-269" },
+    ];
+
+    const ingSteps = [
+      { n: 1, title: "File selected", desc: "data/docs/*.pdf|*.txt|*.html found (or POST /ingest).", file: "main.py:105,130,139-141" },
+      { n: 2, title: "Health check", desc: "pdf_health_check: chars>=20k, chunks>=15, avg<=2500, articles/chunks>=0.5.", file: "chunker.py:259-303" },
+      { n: 3, title: "Load document", desc: "load_pdf/load_text_document/HTML strip; join pages.", file: "chunker.py:52-106" },
+      { n: 4, title: "Normalize", desc: "NFKC + repair split article numbers across newlines.", file: "chunker.py:24-49" },
+      { n: 5, title: "Article split", desc: "AR_ARTICLE anchored; next marker boundary; skip <=10. French fallback.", file: "chunker.py:19-22,153-193" },
+      { n: 6, title: "Window if long", desc: "_window 4000/200 chars for slices >4000; keep article metadata.", file: "chunker.py:122-150" },
+      { n: 7, title: "Word fallback", desc: "If no markers: chunk_text(100,20), article=''.", file: "chunker.py:108-119,170-173" },
+      { n: 8, title: "Prepare chunks", desc: "Dicts {law, article, source, content}.", file: "chunker.py:196-239" },
+      { n: 9, title: "Embed", desc: "embed_texts adds 'passage:' + NFKC, model.encode(normalize=True) → 384-d.", file: "embed.py:21-31" },
+      { n: 10, title: "Upsert", desc: "INSERT ... ON CONFLICT (law,article,md5(content)) DO UPDATE.", file: "vector_store.py:124-148" },
+      { n: 11, title: "Unique index", desc: "documents_identity (law,article,md5(content)) enforced.", file: "vector_store.py:69-87" },
+      { n: 12, title: "Commit", desc: "conn.commit(); rows written = len(data).", file: "vector_store.py:136-148" },
+      { n: 13, title: "Invalidate cache", desc: "invalidate_cache() rebuilds BM25 on next query (fingerprint).", file: "main.py:126,166, hybrid.py:125-127" },
+      { n: 14, title: "Result", desc: "Return {status:'ok', chunks:written, stats}", file: "main.py:123-127" },
+    ];
+
+    function buildTimeline(id, steps) {
+      const root = document.getElementById(id);
+      root.innerHTML = '';
+      steps.forEach(s => {
+        const btn = document.createElement('button');
+        btn.className = 'step-card';
+        btn.dataset.step = s.n;
+        btn.innerHTML = `<div class="top"><span class="title">${s.n}. ${s.title}</span><span class="num">${s.file}</span></div><div class="desc">${s.desc}</div>`;
+        root.appendChild(btn);
+      });
+    }
+
+    function buildDetails(id, steps) {
+      const root = document.getElementById(id);
+      root.innerHTML = '';
+      steps.forEach(s => {
+        const div = document.createElement('div');
+        div.className = 'item';
+        div.innerHTML = `<div class="head"><span class="title">${s.n}. ${s.title}</span><span class="file">${s.file}</span></div><p>${s.desc}</p>`;
+        root.appendChild(div);
+      });
+    }
+
+    buildTimeline('ask-timeline', askSteps);
+    buildDetails('ask-details', askSteps);
+    buildTimeline('ing-timeline', ingSteps);
+    buildDetails('ing-details', ingSteps);
+
+    const navBtns = document.querySelectorAll('.nav-btn');
+    navBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        navBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.querySelectorAll('.section').forEach(sec => sec.classList.add('hidden'));
+        document.getElementById(btn.dataset.target).classList.remove('hidden');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+    });
+
+    function animateSection(prefix, max) {
+      let cur = 0, playing = false, timer = null;
+      const stepEl = document.getElementById(prefix + '-step');
+      const cards = document.querySelectorAll('#' + (prefix === 'ask' ? 'ask-timeline' : 'ing-timeline') + ' .step-card');
+      const svg = document.getElementById(prefix + '-svg');
+      const pkts = svg.querySelectorAll('.pkt');
+      function setStep(n) {
+        cur = n;
+        stepEl.textContent = cur;
+        cards.forEach(c => c.classList.toggle('active', parseInt(c.dataset.step) === cur));
+        pkts.forEach((p, i) => {
+          p.classList.toggle('active', i + 1 <= cur);
+          const am = p.querySelector('animateMotion');
+          if (i + 1 === cur && am) { am.beginElement(); }
+        });
+      }
+      document.getElementById(prefix + '-next').addEventListener('click', () => setStep(Math.min(max, cur + 1)));
+      document.getElementById(prefix + '-reset').addEventListener('click', () => { if (timer) clearInterval(timer); playing = false; document.getElementById(prefix + '-play').classList.remove('active'); document.getElementById(prefix + '-pause').classList.remove('active'); pkts.forEach(p => { const am = p.querySelector('animateMotion'); if (am) { am.beginElement(); am.endElement(); } }); setStep(0); });
+      document.getElementById(prefix + '-play').addEventListener('click', () => { if (playing) return; playing = true; document.getElementById(prefix + '-play').classList.add('active'); document.getElementById(prefix + '-pause').classList.remove('active'); timer = setInterval(() => { if (cur >= max) { clearInterval(timer); playing = false; document.getElementById(prefix + '-play').classList.remove('active'); return; } setStep(cur + 1); }, 850); });
+      document.getElementById(prefix + '-pause').addEventListener('click', () => { if (!playing) return; playing = false; document.getElementById(prefix + '-play').classList.remove('active'); document.getElementById(prefix + '-pause').classList.add('active'); if (timer) clearInterval(timer); });
+      cards.forEach(c => c.addEventListener('click', () => setStep(parseInt(c.dataset.step))));
+      setStep(0);
+    }
+
+    animateSection('ask', 16);
+    animateSection('ing', 14);
+  </script>
+</body>
+
+</html>

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>LLM Internals</title>
+<style>
+  body{margin:0;background:#0a0f1f;color:#fff;font-family:sans-serif;height:100vh;display:flex;flex-direction:column}
+  h1{padding:8px;text-align:center;background:linear-gradient(90deg,#ff6ec7,#7873f5,#4ade80);-webkit-background-clip:text;color:transparent}
+  #stage{flex:1;min-height:0}
+  svg{width:100%;height:100%;display:block}
+  .node{fill:#7873f5;stroke:#fff;stroke-width:1.5}
+  .node text{fill:#fff;font-size:12px;text-anchor:middle;dominant-baseline:middle}
+  .wire{stroke:#4ade80;stroke-width:2.5;fill:none;stroke-dasharray:8 5;animation:dash 1.4s linear infinite}
+  @keyframes dash{to{stroke-dashoffset:-26}}
+  .particle{fill:#facc15}
+  #panel{height:90px;display:flex;align-items:center;justify-content:center;gap:6px;padding:6px;flex-wrap:wrap;overflow:auto;background:#111827}
+  .card{background:#1f2937;border:1px solid #374151;border-radius:8px;padding:4px 8px;font-size:10px;min-width:110px}
+  .card.active{background:#7873f5}
+  #ctrl{padding:6px;text-align:center;background:#111827}
+  button{padding:6px 12px;margin:2px;background:#7873f5;color:#fff;border:none;border-radius:6px;cursor:pointer}
+</style>
+</head>
+<body>
+<h1>LLM Internals - Prompt to Response</h1>
+<div id="stage"><svg id="svg" viewBox="0 0 1100 360" preserveAspectRatio="xMidYMid meet"></svg></div>
+<div id="panel"></div>
+<div id="ctrl">
+  <button onclick="play()">Play</button>
+  <button onclick="pause()">Pause</button>
+  <button onclick="reset()">Reset</button>
+</div>
+<script>
+const steps=[{id:'tok',label:'1.Tokenize'},{id:'emb',label:'2.Embed'},{id:'pos',label:'3.PosEnc'},{id:'attn',label:'4.Attn'},{id:'ffn',label:'5.FFN'},{id:'norm',label:'6.Norm'},{id:'head',label:'7.LMHead'},{id:'samp',label:'8.Sample'},{id:'det',label:'9.Detok'}];
+const coords={tok:[90,180],emb:[210,180],pos:[330,180],attn:[470,90],ffn:[470,270],norm:[610,180],head:[750,180],samp:[890,180],det:[1010,180]};
+const svg=document.getElementById('svg');
+const NS='http://www.w3.org/2000/svg';
+function E(t,a){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);return e;}
+const pairs=[['tok','emb'],['emb','pos'],['pos','attn'],['pos','ffn'],['attn','norm'],['ffn','norm'],['norm','head'],['head','samp'],['samp','det']];
+pairs.forEach(([a,b])=>{const [ax,ay]=coords[a],[bx,by]=coords[b];const mx=(ax+bx)/2;svg.appendChild(E('path',{d:`M${ax},${ay} C${mx},${ay} ${mx},${by} ${bx},${by}`,class:'wire'}));});
+steps.forEach(s=>{const [x,y]=coords[s.id];const g=E('g',{});g.appendChild(E('rect',{x:x-45,y:y-18,width:90,height:36,rx:8,class:'node'}));const t=E('text',{x,y});t.textContent=s.label;g.appendChild(t);svg.appendChild(g);});
+const panel=document.getElementById('panel');
+steps.forEach(s=>{const c=document.createElement('div');c.className='card';c.id='c-'+s.id;c.textContent=s.label;panel.appendChild(c);});
+let running=false,paused=false,speedMs=600,path=['tok','emb','pos','attn','norm','head','samp','det'],idx=0,timer=null;
+function spawn(f,t){const [fx,fy]=coords[f],[tx,ty]=coords[t];const c=E('circle',{r:5,class:'particle'});svg.appendChild(c);const s=performance.now();function tick(n){if(paused){requestAnimationFrame(tick);return;}const tt=Math.min(1,(n-s)/500);c.setAttribute('cx',fx+(tx-fx)*tt);c.setAttribute('cy',fy+(ty-fy)*tt);if(tt<1)requestAnimationFrame(tick);else c.remove();}requestAnimationFrame(tick);}
+function play(){if(running)return;running=true;timer=setInterval(()=>{if(paused)return;if(idx>=path.length){clearInterval(timer);running=false;return;}const id=path[idx];document.querySelectorAll('.card').forEach(c=>c.classList.remove('active'));document.getElementById('c-'+id).classList.add('active');if(idx>0)spawn(path[idx-1],path[idx]);idx++;},speedMs);}
+function pause(){paused=!paused;}
+function reset(){if(timer)clearInterval(timer);running=false;paused=false;idx=0;document.querySelectorAll('.card').forEach(c=>c.classList.remove('active'));}
+</script>
+</body>
+</html>

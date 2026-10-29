@@ -1,0 +1,1156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Moroccan Legal RAG — Full 3D Visual Walkthrough</title>
+<style>
+  :root{
+    --bg:#060912; --text:#e8edff; --muted:#8b97c2;
+    --c-doc:#ffb454; --c-chunk:#7faeff; --c-embed:#2fd6a0; --c-db:#3fb984;
+    --c-dense:#4d9bff; --c-bm25:#ff8fa3; --c-rrf:#c78bff; --c-crag:#ff5d8f;
+    --c-gen:#9faeff; --c-user:#e0b3ff; --c-ans:#b9c7ff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:radial-gradient(1300px 800px at 18% -12%,#151d42 0%,transparent 62%),
+       radial-gradient(1000px 700px at 112% 24%,#26163f 0%,transparent 55%),var(--bg);
+       color:var(--text);font-family:ui-sans-serif,system-ui,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+
+  #scene{position:fixed;inset:0}
+  canvas{display:block}
+
+  .panel-btn{position:fixed;z-index:40;background:#111a38;border:1px solid #2a3563;color:var(--muted);
+    border-radius:9px;padding:6px 11px;font:inherit;font-size:12px;cursor:pointer;transition:.15s}
+  .panel-btn:hover{color:var(--text);border-color:#3a4a86}
+
+  .hud{position:fixed;top:16px;left:16px;z-index:20;max-width:340px;transition:.3s}
+  .hud h1{font-size:16.5px;letter-spacing:-.3px;line-height:1.3}
+  .hud h1 span{color:var(--c-embed)}
+  .hud p{color:var(--muted);font-size:11.5px;margin-top:5px;line-height:1.5}
+
+  .legend{position:fixed;top:16px;right:16px;z-index:20;background:rgba(11,16,34,.86);
+    border:1px solid #242f5c;border-radius:12px;padding:11px 13px;font-size:11px;backdrop-filter:blur(10px);transition:.3s}
+  .legend div{display:flex;align-items:center;gap:7px;margin:3.5px 0;color:var(--muted)}
+  .legend i{width:9px;height:9px;border-radius:50%;display:inline-block;flex:none}
+
+  .stages{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:25;display:flex;gap:5px;
+    flex-wrap:wrap;justify-content:center;max-width:58vw;transition:.3s}
+  .stages button{font:inherit;font-size:11px;font-weight:600;color:var(--muted);background:#0f1834;
+    border:1px solid #26315f;border-radius:8px;padding:5px 9px;cursor:pointer;transition:.15s;white-space:nowrap}
+  .stages button:hover{color:var(--text);border-color:#3a4a86}
+  .stages button.on{color:#06122a;background:linear-gradient(90deg,#5b6cf5,#a45bff);border-color:transparent}
+
+  .caption{position:fixed;bottom:82px;left:50%;transform:translateX(-50%);z-index:20;
+    background:rgba(9,13,29,.92);border:1px solid #242f5c;border-radius:13px;padding:11px 17px;
+    max-width:min(880px,92vw);font-size:13px;line-height:1.55;backdrop-filter:blur(12px);
+    box-shadow:0 12px 40px rgba(0,0,0,.5);transition:opacity .3s}
+  .caption b{color:var(--c-embed)}
+  .caption .k{font-family:ui-monospace,Menlo,Consolas,monospace;background:#1b2450;color:#ffd28a;padding:1px 5px;border-radius:5px;font-size:11.5px}
+  .caption .ar{font-size:14px;color:#cfe3ff;direction:rtl}
+
+  /* big phase banner — appears on every stage change */
+  #phase{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(.7);
+    z-index:60;pointer-events:none;opacity:0;text-align:center;transition:opacity .35s,transform .35s}
+  #phase.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+  #phase .num{font-size:66px;font-weight:800;letter-spacing:-2px;line-height:1;
+    background:linear-gradient(90deg,#5b6cf5,#2fd6a0);-webkit-background-clip:text;background-clip:text;color:transparent;
+    text-shadow:0 0 40px rgba(91,108,245,.4)}
+  #phase .name{font-size:26px;font-weight:700;color:#fff;margin-top:2px;text-shadow:0 2px 24px rgba(0,0,0,.8)}
+  #phase .sub{font-size:13px;color:#9fb0e0;margin-top:4px}
+
+  /* step-by-step mechanism strip */
+  .mech{position:fixed;bottom:150px;left:50%;transform:translateX(-50%);z-index:20;
+    display:flex;gap:0;max-width:min(1000px,94vw);flex-wrap:wrap;justify-content:center;
+    background:rgba(9,13,29,.86);border:1px solid #242f5c;border-radius:12px;padding:8px 12px;
+    backdrop-filter:blur(10px);transition:.3s}
+  .mech .step{display:flex;align-items:center;gap:7px;font-size:11.5px;color:#7d89b4;padding:3px 10px}
+  .mech .step .dot{width:8px;height:8px;border-radius:50%;background:#2a3563;flex:none;transition:.4s}
+  .mech .step.active{color:#fff}
+  .mech .step.active .dot{background:linear-gradient(90deg,#5b6cf5,#2fd6a0);box-shadow:0 0 12px #5b6cf5}
+  .mech .step.done{color:#9fb0e0}
+  .mech .step.done .dot{background:#2fd6a0}
+  .mech .arrow{color:#3a4a86;font-size:11px;align-self:center}
+
+  /* transition flash */
+  #flash{position:fixed;inset:0;z-index:55;pointer-events:none;background:radial-gradient(circle at 50% 50%,
+    rgba(91,108,245,.28),transparent 60%);opacity:0;transition:opacity .5s}
+  #flash.go{opacity:1;transition:none}
+
+  /* sub-step focus popup */
+  #popup{position:fixed;left:16px;bottom:150px;z-index:45;max-width:330px;
+    background:rgba(10,15,32,.95);border:1px solid #3a4a86;border-radius:12px;padding:12px 15px;
+    box-shadow:0 14px 44px rgba(0,0,0,.6);backdrop-filter:blur(14px);
+    transform:translateX(-24px);opacity:0;transition:.4s cubic-bezier(.2,.8,.2,1);pointer-events:none}
+  #popup.show{transform:none;opacity:1}
+  #popup .tag{display:inline-block;font-size:9.5px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;
+    color:#06122a;background:linear-gradient(90deg,#5b6cf5,#2fd6a0);padding:2px 8px;border-radius:99px;margin-bottom:7px}
+  #popup .ttl{font-size:13px;font-weight:700;color:#fff;margin-bottom:4px}
+  #popup .body{font-size:12px;line-height:1.55;color:#c3cdf0}
+  #popup .body .k{font-family:ui-monospace,Menlo,Consolas,monospace;background:#1b2450;color:#ffd28a;padding:1px 5px;border-radius:5px;font-size:11px}
+  #popup .body .ar{direction:rtl;color:#cfe3ff}
+  #popup .stepcount{position:absolute;top:12px;right:14px;font-size:10px;color:#66739f;
+    font-family:ui-monospace,monospace}
+
+  .controls{position:fixed;bottom:0;left:0;right:0;z-index:30;display:flex;gap:9px;align-items:center;
+    justify-content:center;flex-wrap:wrap;padding:12px 14px;background:rgba(6,9,18,.96);
+    border-top:1px solid #2a3563;backdrop-filter:blur(14px);box-shadow:0 -8px 30px rgba(0,0,0,.5)}
+  button.ctl{font:inherit;font-size:13.5px;font-weight:600;color:var(--text);background:#121b40;
+    border:1px solid #2c3a72;border-radius:9px;padding:9px 15px;cursor:pointer;transition:.15s}
+  button.ctl:hover{background:#1c2758;transform:translateY(-1px)}
+  button.ctl.primary{background:linear-gradient(90deg,#5b6cf5,#a45bff);border-color:transparent;min-width:118px}
+  .ctl-label{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:#66739f;
+    align-self:center;margin-right:-4px}
+  .dots{display:flex;gap:6px}
+  .dots button{width:11px;height:11px;padding:0;border-radius:50%;background:#26315f;border:none;cursor:pointer;transition:.2s}
+  .dots button.on{background:linear-gradient(90deg,var(--c-user),var(--c-gen));transform:scale(1.5)}
+  .dots button:hover{background:#3a4a86}
+  .kbd{font-size:11px;color:#7d89b4;background:#0f1834;border:1px solid #26315f;border-radius:7px;padding:5px 9px}
+
+  /* data inspector side panel */
+  #inspector{position:fixed;top:64px;right:16px;z-index:20;width:330px;max-height:calc(100vh - 190px);
+    overflow-y:auto;background:rgba(10,14,30,.94);border:1px solid #242f5c;border-radius:14px;
+    padding:15px;backdrop-filter:blur(14px);transform:translateX(360px);opacity:0;transition:.35s cubic-bezier(.2,.8,.2,1)}
+  #inspector.open{transform:none;opacity:1}
+  #inspector h3{font-size:13px;color:var(--c-embed);margin-bottom:4px}
+  #inspector .sub{font-size:11px;color:var(--muted);margin-bottom:12px}
+  #inspector .field{margin:10px 0;padding-bottom:9px;border-bottom:1px solid #1c2650}
+  #inspector .field:last-child{border:none}
+  #inspector .field .name{font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:#66739f;margin-bottom:3px}
+  #inspector .field .val{font-size:12.5px;color:#dbe4ff;line-height:1.5;word-break:break-word}
+  #inspector .field .val code{font-family:ui-monospace,monospace;background:#1b2450;color:#ffd28a;padding:1px 5px;border-radius:4px;font-size:11px}
+  #inspector .field .val.ar{direction:rtl;text-align:right;font-size:13.5px;color:#cfe3ff}
+  #inspector .bar-row{display:flex;align-items:center;gap:8px;margin:5px 0;font-size:11.5px}
+  #inspector .bar-row .lbl{width:52px;color:var(--muted);flex:none}
+  #inspector .bar-row .track{flex:1;height:8px;background:#141d3d;border-radius:99px;overflow:hidden}
+  #inspector .bar-row .fill{height:100%;border-radius:99px;transition:width .5s}
+  #inspector .bar-row .num{width:44px;text-align:right;font-family:ui-monospace,monospace;font-size:11px;color:#9fb0e0}
+  #inspector .pill{display:inline-block;font-size:10px;padding:2px 7px;border-radius:99px;margin:2px 4px 2px 0;background:#1a2450;color:#9fb0e0}
+  ::-webkit-scrollbar{width:8px}::-webkit-scrollbar-thumb{background:#26315f;border-radius:8px}
+
+  @media(max-width:860px){
+    .legend,.hud p,.mech{display:none}
+    #inspector{display:none}
+    .stages{max-width:92vw;top:auto;bottom:112px}
+    .caption{bottom:150px}
+  }
+</style>
+</head>
+<body>
+<div id="scene"></div>
+
+<button class="panel-btn" id="toggleInspector" style="right:16px;top:16px">📊 Data inspector</button>
+
+<div class="hud">
+  <h1>Moroccan Legal RAG — <span>3D Walkthrough</span></h1>
+  <p>Orbit with drag · zoom with scroll. Every number and sample is real (from the codebase).</p>
+</div>
+
+<div class="legend">
+  <div><i style="background:var(--c-doc)"></i>Documents (9 laws)</div>
+  <div><i style="background:var(--c-chunk)"></i>Chunks (5,864)</div>
+  <div><i style="background:var(--c-embed)"></i>Embeddings (384-d)</div>
+  <div><i style="background:var(--c-db)"></i>pgvector DB</div>
+  <div><i style="background:var(--c-dense)"></i>Dense · cosine</div>
+  <div><i style="background:var(--c-bm25)"></i>BM25 · lexical</div>
+  <div><i style="background:var(--c-rrf)"></i>RRF fusion</div>
+  <div><i style="background:var(--c-crag)"></i>CRAG fallback</div>
+  <div><i style="background:var(--c-user)"></i>User query</div>
+  <div><i style="background:var(--c-gen)"></i>Gemini / answer</div>
+</div>
+
+<div class="stages" id="stages"></div>
+
+<div id="flash"></div>
+<div id="phase">
+  <div class="num" id="phaseNum">0</div>
+  <div class="name" id="phaseName">Overview</div>
+  <div class="sub" id="phaseSub"></div>
+</div>
+
+<div class="caption" id="caption">Loading 3D pipeline…</div>
+<div class="mech" id="mech"></div>
+<div id="popup">
+  <span class="stepcount" id="popCount"></span>
+  <span class="tag" id="popTag">Focus</span>
+  <div class="ttl" id="popTtl"></div>
+  <div class="body" id="popBody"></div>
+</div>
+
+<div id="inspector">
+  <h3 id="inspTitle">Data inspector</h3>
+  <div class="sub" id="inspSub">Live values for this stage</div>
+  <div id="inspBody"></div>
+</div>
+
+<div class="controls">
+  <span class="ctl-label">Navigate</span>
+  <button class="ctl" id="prev">⏮ Prev</button>
+  <button class="ctl primary" id="play">▶ Play / ❚❚ Pause</button>
+  <button class="ctl" id="next">Next ⏭</button>
+  <button class="ctl" id="replay">↺ Replay</button>
+  <label class="ctl" style="display:flex;gap:6px;align-items:center;font-size:12.5px;cursor:pointer">
+    <input type="checkbox" id="auto" checked> Autoplay</label>
+  <span class="ctl-label">Jump</span>
+  <div class="dots" id="dots"></div>
+  <span class="kbd">⌨ Space · ← → · R</span>
+</div>
+
+<!-- Local, offline Three.js (no CDN, no importmap needed) -->
+<script src="vendor/three.min.js"></script>
+<script>
+window.addEventListener('error', function(e){
+  var c=document.getElementById('caption');
+  if(c){ c.innerHTML = '⚠️ <b>Error:</b> ' + (e.message||'unknown') +
+    '<br><span style="color:#8b97c2">Press F12 for the console. If files are on a WSL drive, copy the whole <code>evaluation</code> folder (incl. <code>vendor/</code>) to Windows and open from there.</span>'; }
+});
+</script>
+
+<script>
+/* ================================================================== *
+ *  Minimal built-in OrbitControls (self-contained, no addon needed)
+ * ================================================================== */
+class SimpleOrbit {
+  constructor(cam, dom){
+    this.cam=cam; this.dom=dom;
+    this.target=new THREE.Vector3();
+    this.minDistance=12; this.maxDistance=320;
+    this.enableDamping=true; this.dampingFactor=0.08;
+    this.autoRotate=false;
+    // spherical position
+    const off=new THREE.Vector3().subVectors(cam.position, this.target);
+    this.sph=new THREE.Spherical().setFromVector3(off);
+    this._sph=this.sph.clone();
+    this._ptr=null;
+    dom.addEventListener('pointerdown', e=>{this._ptr={x:e.clientX,y:e.clientY,b:e.button}; this.flying=false; dom.setPointerCapture(e.pointerId);});
+    dom.addEventListener('pointerup', e=>{this._ptr=null;});
+    dom.addEventListener('pointermove', e=>{
+      if(!this._ptr) return;
+      const dx=e.clientX-this._ptr.x, dy=e.clientY-this._ptr.y;
+      this._ptr.x=e.clientX; this._ptr.y=e.clientY;
+      if(this._ptr.b===0){ // left = rotate
+        this._sph.theta -= dx*0.005;
+        this._sph.phi   -= dy*0.005;
+        this._sph.phi = Math.max(0.05, Math.min(Math.PI-0.05, this._sph.phi));
+      } else { // right/middle = pan
+        const pan=new THREE.Vector3();
+        const right=new THREE.Vector3().setFromMatrixColumn(this.cam.matrix,0);
+        const up=new THREE.Vector3().setFromMatrixColumn(this.cam.matrix,1);
+        pan.addScaledVector(right, -dx*this._sph.radius*0.0012);
+        pan.addScaledVector(up, dy*this._sph.radius*0.0012);
+        this.target.add(pan);
+      }
+    });
+    dom.addEventListener('wheel', e=>{
+      e.preventDefault();
+      this.flying=false;
+      this._sph.radius *= (1 + Math.sign(e.deltaY)*0.09);
+      this._sph.radius = Math.max(this.minDistance, Math.min(this.maxDistance, this._sph.radius));
+    }, {passive:false});
+    this.flying=false;
+  }
+  // smoothly move to a new framing (target + spherical radius/angles)
+  flyTo(tx,ty,tz,radius,theta,phi,speed){
+    this._flyTarget=this._flyTarget||new THREE.Vector3();
+    this._flyTarget.set(tx,ty,tz);
+    this._flyRadius=radius; this._flyTheta=theta; this._flyPhi=phi;
+    this._flySpeed=(speed==null?0.06:speed);
+    this.flying=true;
+  }
+  update(){
+    const k = this.enableDamping ? this.dampingFactor : 1;
+    this.sph.theta += (this._sph.theta-this.sph.theta)*k;
+    this.sph.phi   += (this._sph.phi  -this.sph.phi  )*k;
+    this.sph.radius+= (this._sph.radius-this.sph.radius)*k;
+    const off=new THREE.Vector3().setFromSpherical(this.sph);
+    this.cam.position.copy(this.target).add(off);
+    this.cam.lookAt(this.target);
+  }
+  // smooth camera flight toward an absolute framing
+  tick(dt){
+    if(!this.flying) return this.update();
+    const k=(this._flySpeed==null?0.06:this._flySpeed);
+    this._flyTarget=this._flyTarget||this.target.clone();
+    this.target.lerp(this._flyTarget,k);
+    this.sph.radius += (this._flyRadius - this.sph.radius)*k;
+    this.sph.theta  += (this._flyTheta  - this.sph.theta )*k;
+    this.sph.phi    += (this._flyPhi    - this.sph.phi   )*k;
+    // keep the manual-drag reference in sync so grabbing mid-flight is seamless
+    this._sph.radius=this.sph.radius; this._sph.theta=this.sph.theta; this._sph.phi=this.sph.phi;
+    const off=new THREE.Vector3().setFromSpherical(this.sph);
+    this.cam.position.copy(this.target).add(off);
+    this.cam.lookAt(this.target);
+  }
+}
+
+/* ================================================================== *
+ *  RENDERER / SCENE
+ * ================================================================== */
+if(typeof THREE === 'undefined'){
+  document.getElementById('caption').innerHTML =
+    '⚠️ <b>Three.js failed to load.</b> Make sure the <span class="k">vendor/three.min.js</span> file sits next to this HTML file.';
+  throw new Error('three.min.js not loaded');
+}
+const host = document.getElementById('scene');
+const renderer = new THREE.WebGLRenderer({antialias:true, alpha:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth, innerHeight);
+host.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x060912, 0.0062);
+
+const camera = new THREE.PerspectiveCamera(50, innerWidth/innerHeight, 0.1, 3000);
+camera.position.set(-4, 16, 96);
+
+const controls = new SimpleOrbit(camera, renderer.domElement);
+controls.target.set(-2, 0, 6);
+
+scene.add(new THREE.AmbientLight(0x8fa0d0, 0.95));
+const key = new THREE.DirectionalLight(0xffffff, 1.5); key.position.set(30,60,40); scene.add(key);
+const rim = new THREE.PointLight(0x7c9cff, 2.2, 700); rim.position.set(-70,30,-40); scene.add(rim);
+const warm= new THREE.PointLight(0xffb454, 1.6, 700); warm.position.set(80,-20,30); scene.add(warm);
+const grn = new THREE.PointLight(0x2fd6a0, 1.4, 700); grn.position.set(10,10,40); scene.add(grn);
+
+const grid = new THREE.GridHelper(400, 80, 0x18244c, 0x0e1630);
+grid.position.y = -30; grid.material.opacity = 0.45; grid.material.transparent = true;
+scene.add(grid);
+
+/* ================================================================== *
+ *  HELPERS
+ * ================================================================== */
+const TMP = new THREE.Vector3();
+const _radialCache = {};
+function radialTex(color){
+  // accept either "#rrggbb" string or 0xrrggbb number
+  if(typeof color === 'number') color = '#' + color.toString(16).padStart(6,'0');
+  if(_radialCache[color]) return _radialCache[color];
+  const c=document.createElement('canvas'); c.width=c.height=128;
+  const x=c.getContext('2d');
+  const gr=x.createRadialGradient(64,64,0,64,64,64);
+  gr.addColorStop(0,'rgba(255,255,255,1)');
+  gr.addColorStop(0.3,color);
+  gr.addColorStop(1,'rgba(0,0,0,0)');
+  x.fillStyle=gr; x.fillRect(0,0,128,128);
+  const t=new THREE.CanvasTexture(c); _radialCache[color]=t; return t;
+}
+function makeLabel(text, color='#e8edff', size=34, weight='700', rtl=false){
+  const pad=20, c=document.createElement('canvas'), ctx=c.getContext('2d');
+  const font = `${weight} ${size}px ui-sans-serif, system-ui, "Segoe UI", Roboto, "Noto Naskh Arabic", "Amiri", serif`;
+  ctx.font = font;
+  const w = ctx.measureText(text).width;
+  c.width = Math.ceil(w + pad*2); c.height = size + pad*2;
+  const g = c.getContext('2d');
+  g.font = font; g.textBaseline='middle'; g.textAlign='center'; g.direction = rtl?'rtl':'ltr';
+  g.fillStyle = color;
+  g.shadowColor = 'rgba(0,0,0,.9)'; g.shadowBlur = 10;
+  g.fillText(text, c.width/2, c.height/2);
+  const tex = new THREE.CanvasTexture(c); tex.anisotropy = 4;
+  const spr = new THREE.Sprite(new THREE.SpriteMaterial({map:tex, transparent:true, depthTest:false, depthWrite:false}));
+  spr.scale.set(c.width*0.021, c.height*0.021, 1);
+  return spr;
+}
+function boxLabel(lines, color='#e8edff', size=30, w=260){
+  const pad=22, lineH=size*1.5;
+  const c=document.createElement('canvas'), ctx=c.getContext('2d');
+  const font=`600 ${size}px ui-sans-serif, "Segoe UI", Roboto, sans-serif`;
+  ctx.font=font;
+  c.width=w; c.height=lines.length*lineH + pad*2;
+  const g=c.getContext('2d');
+  g.fillStyle='rgba(10,15,32,.86)';
+  roundRect(g,1,1,c.width-2,c.height-2,14); g.fill();
+  g.strokeStyle=color; g.lineWidth=1.5; g.globalAlpha=.5; roundRect(g,1,1,c.width-2,c.height-2,14); g.stroke(); g.globalAlpha=1;
+  g.font=font; g.textAlign='left'; g.textBaseline='middle';
+  lines.forEach((ln,i)=>{
+    const yy = pad + lineH*i + lineH/2;
+    g.fillStyle = i===0 ? color : '#cfd8ff';
+    if(ln.startsWith('  •')){ g.fillStyle='#9fb0e0'; g.font=`500 ${size-4}px ui-sans-serif, "Segoe UI", Roboto, sans-serif`; }
+    else g.font=font;
+    g.fillText(ln, pad, yy);
+  });
+  const tex=new THREE.CanvasTexture(c); tex.anisotropy=4;
+  const spr=new THREE.Sprite(new THREE.SpriteMaterial({map:tex, transparent:true, depthTest:false, depthWrite:false}));
+  spr.scale.set(c.width*0.024, c.height*0.024, 1);
+  return spr;
+}
+function roundRect(g,x,y,w,h,r){g.beginPath();g.moveTo(x+r,y);g.arcTo(x+w,y,x+w,y+h,r);g.arcTo(x+w,y+h,x,y+h,r);g.arcTo(x,y+h,x,y,r);g.arcTo(x,y,x+w,y,r);g.closePath();}
+
+function glowSprite(color, size, opacity=0.5){
+  const mat=new THREE.SpriteMaterial({map:radialTex(color),color,transparent:true,opacity,blending:THREE.AdditiveBlending,depthWrite:false});
+  const s=new THREE.Sprite(mat); s.scale.set(size,size,1); return s;
+}
+function easeInOut(t){return t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;}
+function smooth(t){return t*t*(3-2*t);}
+
+/* ================================================================== *
+ *  PATHS / FLOW
+ * ================================================================== */
+function curveFrom(pts){return new THREE.CatmullRomCurve3(pts.map(p=>new THREE.Vector3(p[0],p[1],p[2])));}
+function tube(curve,color,radius=0.1,opacity=0.24){
+  const geo=new THREE.TubeGeometry(curve,80,radius,6,false);
+  const m=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({color,transparent:true,opacity,blending:THREE.AdditiveBlending}));
+  scene.add(m);return m;
+}
+class Flow{
+  constructor(curve,color,count=14,speed=0.12,size=0.95,delay=0,visible=false){
+    this.color=color;this.speed=speed;this.delay=delay;this.count=count;
+    const geo=new THREE.BufferGeometry();
+    geo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(count*3),3));
+    this.points=new THREE.Points(geo,new THREE.PointsMaterial({
+      color,size,map:radialTex(color),transparent:true,opacity:0.9,
+      blending:THREE.AdditiveBlending,depthWrite:false,sizeAttenuation:true}));
+    this.curve=curve;this.t0=0;this.points.visible=visible;scene.add(this.points);
+  }
+  update(t){
+    const p=((t*this.speed+this.delay)%1);
+    const arr=this.points.geometry.attributes.position.array;
+    for(let i=0;i<this.count;i++){
+      const d=(p+i/this.count)%1;
+      this.curve.getPointAt(d,TMP);
+      arr[i*3]=TMP.x;arr[i*3+1]=TMP.y;arr[i*3+2]=TMP.z;
+    }
+    this.points.geometry.attributes.position.needsUpdate=true;
+    this.points.material.opacity=0.3+0.65*Math.sin(p*Math.PI);
+  }
+  set visible(v){this.points.visible=v;}
+  get visible(){return this.points.visible;}
+}
+
+/* ================================================================== *
+ *  REAL DATA
+ * ================================================================== */
+const LAWS=[
+  {label:'القانون الإداري', short:'Admin',  n:1581,color:'#4d9bff'},
+  {label:'الالتزامات والعقود', short:'Oblig', n:1303,color:'#5fb0ff'},
+  {label:'المسطرة الجنائية', short:'Crim.Proc', n:852,color:'#7c9cff'},
+  {label:'القانون الجنائي', short:'Penal', n:758,color:'#ff8fa3'},
+  {label:'مدونة الشغل', short:'Labour', n:590,color:'#2fd6a0'},
+  {label:'مدونة الأسرة', short:'Family', n:399,color:'#ffb454'},
+  {label:'قانون الاستهلاك', short:'Consumer', n:205,color:'#c78bff'},
+  {label:'الصحافة والنشر', short:'Press', n:121,color:'#ff5d8f'},
+  {label:'حماية البيانات', short:'Data', n:55,color:'#9faeff'},
+];
+const TOTAL=5864;
+
+// REAL chunk sample (code-famille-70-03.pdf, article 4)
+const SAMPLE_CHUNK = {
+  law:'code-famille-70-03.pdf', article:'4',
+  content:'المادة4 الزواج ميثاق تراض وترابط شرعي بين رجل وامرأة على وجه الدوام، غايته الإحصان والعفاف وإنشاء أسرة مستقرة، برعاية الزوجين طبقا لأحكام هذه المدونة'
+};
+// REAL long-article example (needs windowing)
+const LONG_ARTICLE = {article:'2', chars:47437};
+// REAL question + answer
+const Q = 'ما هي عقوبة السرقة في المادة 505؟';
+const ANSWER_LINES = [
+  'عقوبة السرقة (القانون الجنائي):',
+  '  • الفصل 505 — الحبس من سنة إلى خمس سنوات',
+  '  • الفصل 508 — الحبس من 20 إلى 30 يوماً',
+  '  • الفصل 517 — غرامة من 1200 إلى 5000 درهم',
+];
+
+/* ================================================================== *
+ *  OBJECTS
+ * ================================================================== */
+// documents
+const docGroup=new THREE.Group();scene.add(docGroup);
+const docs=[];
+LAWS.forEach((L,i)=>{
+  const y=(i-(LAWS.length-1)/2)*5.2;
+  const geo=new THREE.BoxGeometry(9,4,1.2);
+  const mat=new THREE.MeshStandardMaterial({color:L.color,emissive:L.color,emissiveIntensity:0.28,
+    metalness:0.35,roughness:0.45,transparent:true,opacity:0.9});
+  const box=new THREE.Mesh(geo,mat);
+  box.position.set(-104+(i%2)*5,y,-58);
+  docGroup.add(box);
+  const lbl=makeLabel(L.label,L.color,30,'700',true);
+  lbl.position.set(box.position.x-9,y,-58);
+  docGroup.add(lbl);
+  const cnt=makeLabel(`${L.n}`, '#93a0c8',24,'600');
+  cnt.position.set(box.position.x,y-3.4,-58);
+  docGroup.add(cnt);
+  docs.push({mesh:box,...L,base:box.position.clone()});
+});
+
+// chunk particles
+const CHUNK_N=260;
+const chunkGeo=new THREE.BufferGeometry();
+const chunkPos=new Float32Array(CHUNK_N*3);
+chunkGeo.setAttribute('position',new THREE.BufferAttribute(chunkPos,3));
+const chunkMat=new THREE.PointsMaterial({color:0x7faeff,size:1.05,map:radialTex('#7faeff'),
+  transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false});
+const chunkPts=new THREE.Points(chunkGeo,chunkMat);scene.add(chunkPts);
+const chunkTargets=[],chunkStart=[];
+for(let i=0;i<CHUNK_N;i++){
+  const li=i%LAWS.length;const rowY=(li-(LAWS.length-1)/2)*5.2;
+  const tx=-84+(i%20)*1.4, ty=rowY+(Math.random()-0.5)*3.5, tz=-38+(Math.floor(i/20)%4)*2-(Math.random()*4);
+  chunkTargets.push({x:tx,y:ty,z:tz,li});
+  chunkStart.push({x:-104+Math.random()*10,y:rowY,z:-58});
+}
+
+// embedding cloud
+const EMB_N=600;
+const embGeo=new THREE.BufferGeometry();
+const embPos=new Float32Array(EMB_N*3),embCol=new Float32Array(EMB_N*3);
+embGeo.setAttribute('position',new THREE.BufferAttribute(embPos,3));
+embGeo.setAttribute('color',new THREE.BufferAttribute(embCol,3));
+const embMat=new THREE.PointsMaterial({size:0.95,vertexColors:true,map:radialTex('#ffffff'),
+  transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false});
+const embPts=new THREE.Points(embGeo,embMat);scene.add(embPts);
+const embTargets=[],_cc=new THREE.Color();
+const clusterCenters=LAWS.map((L,i)=>{
+  const ang=(i/LAWS.length)*Math.PI*2;
+  return new THREE.Vector3(-8+Math.cos(ang)*12,(i-(LAWS.length-1)/2)*3,-14+Math.sin(ang)*8);
+});
+for(let i=0;i<EMB_N;i++){
+  const li=i%LAWS.length;const C=clusterCenters[li];
+  const p=new THREE.Vector3(C.x+(Math.random()-0.5)*8,C.y+(Math.random()-0.5)*8,C.z+(Math.random()-0.5)*8);
+  embTargets.push(p);
+  _cc.set(LAWS[li].color);const f=0.55+Math.random()*0.45;
+  embCol[i*3]=_cc.r*f;embCol[i*3+1]=_cc.g*f;embCol[i*3+2]=_cc.b*f;
+}
+embGeo.attributes.color.needsUpdate=true;
+
+// DB cylinder
+const dbGroup=new THREE.Group();scene.add(dbGroup);
+const dbCyl=new THREE.Mesh(new THREE.CylinderGeometry(11,11,22,56,1,true),
+  new THREE.MeshStandardMaterial({color:0x123a2c,emissive:0x2fd6a0,emissiveIntensity:0.2,
+    metalness:0.5,roughness:0.5,transparent:true,opacity:0.28,side:THREE.DoubleSide}));
+dbCyl.rotation.z=Math.PI/2;dbCyl.position.set(-4,0,10);dbGroup.add(dbCyl);
+const dbLabel=makeLabel('pgvector · vector(384) · 5 864 chunks', '#2fd6a0', 30,'700');
+dbLabel.position.set(-4,15,10);dbGroup.add(dbLabel);
+const DBN=380;
+const dbPGeo=new THREE.BufferGeometry();
+const dbPPos=new Float32Array(DBN*3),dbPCol=new Float32Array(DBN*3);
+dbPGeo.setAttribute('position',new THREE.BufferAttribute(dbPPos,3));
+dbPGeo.setAttribute('color',new THREE.BufferAttribute(dbPCol,3));
+const dbP=new THREE.Points(dbPGeo,new THREE.PointsMaterial({size:0.85,vertexColors:true,
+  map:radialTex('#ffffff'),transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false}));
+dbGroup.add(dbP);
+for(let i=0;i<DBN;i++){
+  const li=i%LAWS.length,ang=Math.random()*Math.PI*2,rr=Math.random()*10,xx=(Math.random()-0.5)*21;
+  dbPPos[i*3]=-4+xx;dbPPos[i*3+1]=Math.cos(ang)*rr;dbPPos[i*3+2]=10+Math.sin(ang)*rr;
+  _cc.set(LAWS[li].color);dbPCol[i*3]=_cc.r;dbPCol[i*3+1]=_cc.g;dbPCol[i*3+2]=_cc.b;
+}
+dbPGeo.attributes.color.needsUpdate=true;
+
+// user query
+const userGrp=new THREE.Group();scene.add(userGrp);
+const userBall=new THREE.Mesh(new THREE.SphereGeometry(1.9,32,32),
+  new THREE.MeshStandardMaterial({color:0xe0b3ff,emissive:0xc78bff,emissiveIntensity:1.5,roughness:0.25}));
+userBall.add(glowSprite('#e0b3ff',12,0.85));
+userGrp.add(userBall);
+const userLbl=boxLabel([Q,'(= query prefix + e5-small)'],'#e0b3ff',29,300);
+userGrp.add(userLbl);
+userBall.position.set(-96,20,34);userLbl.position.set(-96,27,37);
+
+// dense + bm25 racks
+const denseGrp=new THREE.Group(),bmGrp=new THREE.Group();scene.add(denseGrp,bmGrp);
+const denseSlots=[],bmSlots=[];
+for(let i=0;i<12;i++){
+  const y=20-i*3.0;
+  const dm=new THREE.Mesh(new THREE.BoxGeometry(6,1.6,1.6),
+    new THREE.MeshStandardMaterial({color:0x4d9bff,emissive:0x4d9bff,emissiveIntensity:0.4,transparent:true,opacity:0.9}));
+  dm.position.set(-44,y,30);denseGrp.add(dm);denseSlots.push({mesh:dm});
+  const bm=new THREE.Mesh(new THREE.BoxGeometry(6,1.6,1.6),
+    new THREE.MeshStandardMaterial({color:0xff8fa3,emissive:0xff8fa3,emissiveIntensity:0.4,transparent:true,opacity:0.9}));
+  bm.position.set(40,y,30);bmGrp.add(bm);bmSlots.push({mesh:bm});
+}
+const denseLbl=boxLabel(['DENSE  ·  cosine','  1 −(embedding <=> query)','  LIMIT 40  ·  sim ≥ 0.78'],'#4d9bff',28,300);
+denseLbl.position.set(-44,26,34);scene.add(denseLbl);
+const bmLbl=boxLabel(['BM25  ·  lexical','  k1=1.5  b=0.75','  IDF=ln(1+(N−df+.5)/(df+.5))'],'#ff8fa3',28,300);
+bmLbl.position.set(40,26,34);scene.add(bmLbl);
+
+// RRF block
+const rrfBlock=new THREE.Mesh(new THREE.BoxGeometry(11,11,3.5),
+  new THREE.MeshStandardMaterial({color:0x2a1d52,emissive:0xc78bff,emissiveIntensity:0.45,transparent:true,opacity:0.5}));
+rrfBlock.position.set(-2,3,10);scene.add(rrfBlock);
+const rrfLbl=boxLabel(['RRF  Σ 1/(60+rank)','  wᵈ=1.0   wᵇ=0.35','  → top 10 context chunks'],'#c78bff',28,300);
+rrfLbl.position.set(-2,11,16);scene.add(rrfLbl);
+
+// CRAG zone
+const cragBox=new THREE.Mesh(new THREE.BoxGeometry(14,10,10),
+  new THREE.MeshBasicMaterial({color:0xff5d8f,transparent:true,opacity:0.05,wireframe:false}));
+cragBox.position.set(-70,-14,20);scene.add(cragBox);
+const cragEdges=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(14,10,10)),
+  new THREE.LineBasicMaterial({color:0xff5d8f,transparent:true,opacity:0.55}));
+cragEdges.position.copy(cragBox.position);scene.add(cragEdges);
+const cragLbl=boxLabel(['CRAG  (if best sim < 0.78)','  adala → ism → ddg','  relevance ≥ 0.25  ·  max 3'],'#ff5d8f',27,320);
+cragLbl.position.set(-70,-6,20);scene.add(cragLbl);
+
+// Gemini orb
+const gemOrb=new THREE.Mesh(new THREE.IcosahedronGeometry(3.8,3),
+  new THREE.MeshStandardMaterial({color:0x9faeff,emissive:0x7c9cff,emissiveIntensity:1.0,roughness:0.28,flatShading:true}));
+gemOrb.position.set(50,4,58);scene.add(gemOrb);
+gemOrb.add(glowSprite('#9faeff',20,0.6));
+const gemLbl=boxLabel(['GEMINI  generate_answer','  gemini-3.1-flash-lite','  → 3.5-flash-lite → 3-flash'],'#9faeff',28,320);
+gemLbl.position.set(50,-5,58);scene.add(gemLbl);
+
+// answer card
+const ansCard=new THREE.Mesh(new THREE.PlaneGeometry(26,16),
+  new THREE.MeshBasicMaterial({map:radialTex('#b9c7ff'),color:0xb9c7ff,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false}));
+ansCard.position.set(84,2,58);scene.add(ansCard);
+const ansLbl=boxLabel(ANSWER_LINES,'#b9c7ff',27,340);
+ansLbl.position.set(84,4,62);scene.add(ansLbl);
+
+// context card (the augmented prompt)
+const ctxCard=new THREE.Mesh(new THREE.PlaneGeometry(22,14),
+  new THREE.MeshBasicMaterial({map:radialTex('#9faeff'),color:0x9faeff,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false}));
+ctxCard.position.set(24,3,34);scene.add(ctxCard);
+const ctxLbl=boxLabel(['AUGMENTED PROMPT','  [law — المادة N] × 10','  + "answer only from context"'],'#9faeff',26,320);
+ctxLbl.position.set(24,-6,34);scene.add(ctxLbl);
+
+/* --- mechanism readouts (text cut / vector xyz / cosine math) --- */
+// 1) "cutting board" under the docs cluster: a strip of text split into pieces
+const cutGrp=new THREE.Group();scene.add(cutGrp);
+const cutLbl=boxLabel(['CHUNKING  «المادة 4»','  one article → one chunk','  >4000 chars → 4000+200 windows'],'#7faeff',25,320);
+cutLbl.position.set(-84,-24,-38);cutGrp.add(cutLbl);
+const cutPieces=[];
+for(let i=0;i<7;i++){
+  const g=new THREE.Mesh(new THREE.BoxGeometry(2.2,1.1,0.4),
+    new THREE.MeshStandardMaterial({color:0x7faeff,emissive:0x2fd6a0,emissiveIntensity:0.5,transparent:true,opacity:0}));
+  g.position.set(-96+i*2.6,-30,-34);cutGrp.add(g);cutPieces.push(g);
+}
+// 2) vector readout: shows 384-d as sampled numbers
+const vecGrp=new THREE.Group();scene.add(vecGrp);
+const vecLbl=boxLabel(['VECTOR  x1..x384','  [ 0.021, −0.114, 0.087, … ]','  ‖v‖ = 1  →  cos = x·y'],'#2fd6a0',25,340);
+vecLbl.position.set(-8,-26,-14);vecGrp.add(vecLbl);
+// 3) cosine readout: the actual dot-product arithmetic, updated live
+const cosGrp=new THREE.Group();scene.add(cosGrp);
+let cosLbl=boxLabel(['COSINE  sim = q · k','  = 0.00','  sim ≥ 0.78  → ADMIT'],'#4d9bff',26,320);
+cosLbl.position.set(-4,-24,10);cosGrp.add(cosLbl);
+let cosVal=0, cosTop='cosine';
+function updateCosLbl(){
+  cosGrp.remove(cosLbl);
+  const lines=[
+    cosTop,
+    `  = ${cosVal.toFixed(3)}`,
+    cosVal>=0.78?'  ✓ ADMITTED (≥ 0.78)':'  ✗ below 0.78',
+  ];
+  cosLbl=boxLabel(lines,cosVal>=0.78?'#2fd6a0':'#ff8fa3',26,320);
+  cosLbl.position.set(-4,-24,10);cosGrp.add(cosLbl);
+}
+cutGrp.visible=vecGrp.visible=cosGrp.visible=false;
+
+/* ================================================================== *
+ *  FLOW PATHS
+ * ================================================================== */
+const pDocChunk=LAWS.map((L,i)=>{const y=(i-(LAWS.length-1)/2)*5.2;
+  return curveFrom([[-100+(i%2)*5,y,-58],[-90,y,-48],[-80,y,-38]]);});
+const pChunkEmb=curveFrom([[-70,0,-36],[-40,0,-24],[-8,0,-14]]);
+const pEmbDb=curveFrom([[-8,0,-14],[-6,0,0],[-4,0,2]]);
+const pDbDense=curveFrom([[-4,0,18],[-24,8,26],[-44,16,30]]);
+const pDbBm=curveFrom([[-4,0,18],[18,8,26],[40,16,30]]);
+const pUserDense=curveFrom([[-96,20,34],[-70,18,32],[-44,16,30]]);
+const pUserBm=curveFrom([[-96,20,34],[-20,18,32],[40,16,30]]);
+const pDenseRrf=curveFrom([[-44,16,30],[-30,10,22],[-8,6,14]]);
+const pBmRrf=curveFrom([[40,16,30],[20,10,22],[-2,6,14]]);
+const pRrfCtx=curveFrom([[-2,6,14],[10,4,24],[24,3,32]]);
+const pCtxGen=curveFrom([[24,3,34],[36,4,46],[50,4,56]]);
+const pCragRrf=curveFrom([[-70,-14,20],[-44,-6,18],[-12,0,12]]);
+
+// faint tubes
+tube(pChunkEmb,0x7faeff,0.1,0.16);
+tube(pEmbDb,0x2fd6a0,0.1,0.18);
+tube(pDbDense,0x4d9bff,0.07,0.12);
+tube(pDbBm,0xff8fa3,0.07,0.12);
+tube(pCtxGen,0x9faeff,0.1,0.16);
+tube(pCragRrf,0xff5d8f,0.07,0.10);
+
+const flows={
+  docs: pDocChunk.map((c,i)=>new Flow(c,0xffb454,8,0.11,0.9,i*0.04)),
+  chunk:[new Flow(pChunkEmb,0x7faeff,20,0.11,0.95)],
+  emb:[new Flow(pEmbDb,0x2fd6a0,18,0.13,0.95)],
+  dense:[new Flow(pUserDense,0x4d9bff,12,0.17,0.9),new Flow(pDbDense,0x4d9bff,10,0.13,0.85)],
+  bm25:[new Flow(pUserBm,0xff8fa3,12,0.17,0.9),new Flow(pDbBm,0xff8fa3,10,0.13,0.85)],
+  fuse:[new Flow(pDenseRrf,0xc78bff,12,0.15,0.95),new Flow(pBmRrf,0xc78bff,12,0.15,0.95)],
+  ctx:[new Flow(pRrfCtx,0x9faeff,12,0.14,0.95)],
+  gen:[new Flow(pCtxGen,0x9faeff,12,0.13,1.0)],
+  crag:[new Flow(pCragRrf,0xff5d8f,10,0.15,0.95)],
+};
+function showFlows(keys,on){keys.forEach(k=>flows[k].forEach(f=>f.visible=on));}
+
+/* ================================================================== *
+ *  INSPECTOR DATA (per stage)
+ * ================================================================== */
+const INSPECT = {
+  overview: {title:'Pipeline overview', sub:'9 laws → 5,864 chunks',
+    fields:[
+      ['Corpus','9 Moroccan law documents · 5,864 chunks total'],
+      ['Embedding model','<code>intfloat/multilingual-e5-small</code> → 384-d'],
+      ['Vector store','<code>pgvector vector(384)</code>, exact scan (no ANN)'],
+      ['Retrieval','Hybrid: dense cosine + BM25, fused by RRF'],
+      ['Generation','<code>gemini-3.1-flash-lite</code> + 2 fallbacks'],
+    ]},
+  ingest: {title:'1 · Ingestion', sub:'pdf_health_check gate',
+    fields:[
+      ['Loader','PyMuPDF (PDF) / direct read (TXT, HTML)'],
+      ['Gate: min chars','<code>≥ 20,000</code> — rejects scanned PDFs'],
+      ['Gate: min chunks','<code>≥ 15</code> — rejects broken RTL split'],
+      ['Gate: avg size','<code>≤ 2,500</code> chars/chunk'],
+      ['Gate: articles','<code>≥ 50%</code> of chunks carry an article'],
+      ['Rejected','مدونة الشغل.pdf (1 blob), constitution_marocaine (image-only)'],
+    ],bars:[['Admin',1581,1581],['Oblig',1303,1581],['CrimProc',852,1581],['Penal',758,1581],['Labour',590,1581],['Family',399,1581],['Consumer',205,1581],['Press',121,1581],['Data',55,1581]]},
+  chunk: {title:'2 · Chunking', sub:'structure-aware, 1 article = 1 chunk',
+    fields:[
+      ['Arabic markers',"<code>المادة / مادة / الفصل / فصل</code> (+ ordinals)"],
+      ['French markers','<code>Article / Art.</code>'],
+      ['Normalization','<code>NFKC</code> + rejoin split article numbers (RTL fix)'],
+      ['Oversized article','<code>&gt; 4000 chars</code> → windows of 4000, overlap 200'],
+      ['Fallback','<code>chunk_text(100 words, 20% overlap)</code>'],
+      ['Real example','<span class="ar">المادة4 الزواج ميثاق تراض …</span>'],
+      ['Real oversized','article 2 → 47,437 chars → windowed'],
+    ]},
+  embed: {title:'3 · Embedding', sub:'text → 384-d unit vector',
+    fields:[
+      ['Model','<code>intfloat/multilingual-e5-small</code>'],
+      ['Dimension','<code>384</code>'],
+      ['Ingest prefix','<code>passage: </code>'],
+      ['Query prefix','<code>query: </code>'],
+      ['Normalization','<code>normalize_embeddings=True</code> → ‖v‖=1'],
+      ['Consequence','cosine similarity == dot product'],
+      ['PCA note','2-D map keeps true NN in 40/40 spot checks'],
+    ]},
+  store: {title:'4 · Storage', sub:'pgvector upsert',
+    fields:[
+      ['Table','<code>documents(id, content, embedding, law, article, source)</code>'],
+      ['Column type','<code>vector(384)</code>'],
+      ['Identity key','<code>UNIQUE(law, article, md5(content))</code>'],
+      ['Upsert','<code>ON CONFLICT … DO UPDATE</code>'],
+      ['Index','none — exact seq scan ~1 ms for 5.2k rows'],
+      ['Why','per PGVECTOR_GUIDE §11; re-benchmark HNSW > 10k'],
+      ['Cache','BM25 index invalidated by (count, max_id)'],
+    ]},
+  query: {title:'5 · Query', sub:'two retrievers in parallel',
+    fields:[
+      ['Question','<span class="ar">ما هي عقوبة السرقة في المادة 505؟</span>'],
+      ['Rephrase','Gemini #1 — only if input is not Arabic'],
+      ['Dense','<code>embed_query("query: …")</code> → LIMIT 40 candidates'],
+      ['Sparse','Okapi BM25 over full corpus, top 40 positive'],
+      ['BM25 params','<code>k1=1.5</code>, <code>b=0.75</code>'],
+      ['Why both','Dense = paraphrase; BM25 = exact "المادة 505"'],
+    ],bars:[['sim(q,k1)',0.91,1],['sim(q,k2)',0.74,1],['sim(q,k3)',0.61,1],['sim(q,k4)',0.38,1],['sim(q,k5)',0.12,1]]},
+  cosine: {title:'6 · Cosine similarity', sub:'1 − (embedding <=> query)',
+    fields:[
+      ['Formula','<code>similarity = 1 − cosine_distance</code>'],
+      ['Operator','pgvector <code>&lt;=&gt;</code>'],
+      ['Range','<code>[0, 1]</code> after unit normalization'],
+      ['Admission','<code>sim ≥ 0.78</code> OR <code>bm25 ≥ 0.6·best</code>'],
+      ['Threshold','<code>0.78</code> (settings.similarity_threshold)'],
+      ['Note','Other laws mention "السرقة"; only the Penal Code defines the offence'],
+    ],bars:[['505 ✓',0.88,1],['517',0.79,1],['505?',0.76,1],['admin',0.63,1],['autre',0.41,1]]},
+  rrf: {title:'7 · RRF fusion', sub:'rank-based, scale-free',
+    fields:[
+      ['Formula','<code>Σ 1/(k + rank)</code>'],
+      ['k','<code>60</code>'],
+      ['Weight dense','<code>wᵈ = 1.0</code>'],
+      ['Weight sparse','<code>wᵇ = 0.35</code> (tie-breaker)'],
+      ['Why ranks','cosine [0,1] vs BM25 [0,30+] are incomparable'],
+      ['Output','top <code>10</code> chunks → context'],
+      ['Tie-break','keyword boost (+0.02/word, cap +0.05)'],
+    ],bars:[['RRF 505',0.031,0.04],['RRF 508',0.026,0.04],['RRF 517',0.021,0.04],['RRF mix',0.017,0.04]]},
+  crag: {title:'8 · Corrective RAG', sub:'fallback only when weak',
+    fields:[
+      ['Trigger','best dense sim <code>&lt; 0.78</code>'],
+      ['Order','<code>adala → ism → ddg</code>'],
+      ['Domains','allowlist <code>.ma, adala.justice.gov.ma, ism.ma</code>'],
+      ['Relevance','stem-overlap <code>≥ 0.25</code>'],
+      ['Cap','<code>max 3</code> live chunks'],
+      ['Real trap','ISM answered a theft question with "تبادل المعطيات" — caught by relevance gate'],
+      ['Tag','context labelled [db] / [web] / [commentary]'],
+    ]},
+  ctx: {title:'9 · Augmentation', sub:'build the grounded prompt',
+    fields:[
+      ['Input','top <code>10</code> retained chunks'],
+      ['Format','<code>[law — المادة N]</code> + content'],
+      ['System rule 1','answer only from context'],
+      ['System rule 2','name the law on every citation'],
+      ['System rule 3','SUBJECT-MATCH GATE — right law, wrong topic ≠ evidence'],
+      ['System rule 4','cross-domain guard — never mix laws'],
+      ['History','last 6 turns, each truncated to 600 chars'],
+    ]},
+  gen: {title:'10 · Generation', sub:'grounded answer + citations',
+    fields:[
+      ['Model','<code>gemini-3.1-flash-lite</code>'],
+      ['Fallbacks','3.5-flash-lite → 3-flash-preview · 3 retries each'],
+      ['Rule 1','answer only from context'],
+      ['Rule 2','SUBJECT-MATCH GATE (right law, wrong topic ≠ evidence)'],
+      ['Rule 3','ARTICLE IDENTITY — always name the law'],
+      ['Rule 4','cross-domain guard — never mix laws'],
+      ['Real answer','<span class="ar">الفصل 505: الحبس من سنة إلى خمس سنوات</span>'],
+      ['Extra','2 Gemini calls (Arabic) / 3 (rephrase needed)'],
+    ]},
+};
+
+/* ================================================================== *
+ *  STAGE META — short name + step-by-step mechanism strip
+ * ================================================================== */
+const STAGE_META={
+  overview:{name:'Overview',      sub:'the whole journey',   steps:['Documents','Chunks','Vectors','DB','Hybrid search','Answer']},
+  ingest:  {name:'1 · Ingestion', sub:'load + health-check',  steps:['Load PDF/TXT/HTML','Check ≥20k chars','Check ≥15 chunks','Reject broken','Keep 9 laws']},
+  chunk:   {name:'2 · Chunking',  sub:'cut text into chunks', steps:['Find «المادة N»','1 article = 1 chunk','>4000 chars → windows','4000 + 200 overlap','5,864 chunks']},
+  embed:   {name:'3 · Embedding', sub:'text → 384 numbers',   steps:['prefix passage:','e5-small encodes','384-d vector','normalize → ‖v‖=1','cos = dot product']},
+  store:   {name:'4 · Storage',   sub:'write to pgvector',     steps:['content + vector(384)','key (law,article,md5)','ON CONFLICT upsert','no ANN index','exact scan ~1ms']},
+  query:   {name:'5 · Query',     sub:'two searches run',      steps:['«…المادة 505»','embed query:','DENSE top 40 (cos)','BM25 top 40 (exact)','both in parallel']},
+  cosine:  {name:'6 · Cosine',    sub:'score every chunk',     steps:['unit vectors','sim = x·y','1 − distance','sim ≥ 0.78 admit','rank chunks']},
+  rrf:     {name:'7 · RRF fuse',  sub:'merge by rank',         steps:['cosine [0,1]','BM25 [0,30+]','Σ 1/(60+rank)','wᵈ=1.0 wᵇ=0.35','top 10 kept']},
+  ctx:     {name:'9 · Augment',   sub:'build the prompt',      steps:['take top 10','[law — المادة N]','+ grounding rules','+ last 6 turns','→ prompt']},
+  crag:    {name:'8 · CRAG',      sub:'web fallback if weak',  steps:['best sim < 0.78?','adala → ism → ddg','allowlist .ma only','relevance ≥ 0.25','max 3 chunks']},
+  gen:     {name:'10 · Generate', sub:'grounded answer',       steps:['prompt in','gemini-3.1-flash','answer from context','name the law','+ citations']},
+};
+// order for the mechanism strip — ctx (Augment) comes before gen
+const STAGE_ORDER=['overview','ingest','chunk','embed','store','query','cosine','rrf','ctx','crag','gen'];
+
+/* ---- per-scene camera framing: [targetX,Y,Z, radius, theta, phi] ----
+ * theta: horizontal angle (rad) · phi: polar angle (0=top, PI/2=side) */
+const CAM={
+  overview:[-4,  0, 6,  120, 0.35, 1.05],
+  ingest:  [-98, 0, -52, 58, 0.55, 1.10],
+  chunk:   [-78, -8,-40, 62, 0.60, 1.05],
+  embed:   [ -8, 0, -14, 66, 0.30, 1.02],
+  store:   [ -4, 0, 12,  72, 0.25, 1.00],
+  query:   [ -4,10, 22, 132, 0.42, 1.00],
+  cosine:  [ -4,10, 22, 138, 0.42, 0.92],
+  rrf:     [ -4, 6, 16,  78, 0.30, 1.00],
+  ctx:     [ 16, 3, 30,  66, 0.28, 1.02],
+  crag:    [-58,-10, 22,  64, 0.55, 1.05],
+  gen:     [ 55, 3, 56,  78, 0.30, 1.02],
+};
+
+/* ---- transition sound (WebAudio, no assets) ---- */
+let audioCtx=null;
+function ensureAudio(){ if(!audioCtx){ try{audioCtx=new (window.AudioContext||window.webkitAudioContext)();}catch(e){} } return audioCtx; }
+function blip(freq,dur,type,vol){
+  const ac=ensureAudio(); if(!ac) return;
+  if(ac.state==='suspended') ac.resume();
+  const o=ac.createOscillator(),g=ac.createGain();
+  o.type=type||'sine'; o.frequency.value=freq;
+  g.gain.setValueAtTime(0,ac.currentTime);
+  g.gain.linearRampToValueAtTime(vol||0.12,ac.currentTime+0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001,ac.currentTime+(dur||0.18));
+  o.connect(g);g.connect(ac.destination);
+  o.start();o.stop(ac.currentTime+(dur||0.18)+0.02);
+}
+// pleasant two-note swoop on every stage change; direction-aware
+function stageSound(dir){
+  const base=dir>=0?392:330;
+  blip(base,0.14,'sine',0.10);
+  setTimeout(()=>blip(base*(dir>=0?1.5:1.25),0.22,'triangle',0.08),70);
+}
+let soundOn=true;
+
+/* ================================================================== *
+ *  SCENES
+ * ================================================================== */
+let t=0;
+function resetAll(){
+  chunkMat.opacity=0; embMat.opacity=0; dbP.material.opacity=0;
+  ansCard.material.opacity=0; ctxCard.material.opacity=0;
+  dbCyl.material.opacity=0.28;
+  Object.values(flows).forEach(a=>a.forEach(f=>f.visible=false));
+  docs.forEach(d=>{d.mesh.material.opacity=0.9;d.mesh.position.copy(d.base);});
+  userGrp.visible=true; cragEdges.material.opacity=0.55;
+  denseSlots.forEach(s=>s.mesh.material.opacity=0.9);
+  bmSlots.forEach(s=>s.mesh.material.opacity=0.9);
+  gemOrb.rotation.set(0,0,0);
+  cutGrp.visible=vecGrp.visible=cosGrp.visible=false;
+  cutPieces.forEach(p=>p.material.opacity=0);
+}
+
+const SCENES=[
+  {id:'overview',dur:12000,
+   caption:'<b>End to end:</b> 9 law documents → 5,864 chunks → 384-d embeddings → pgvector → hybrid retrieval → grounded answer. Drag to orbit.',
+   update(){}},
+  {id:'ingest',dur:12000,
+   caption:'<b>Ingestion.</b> Nine corpus files are loaded and pass <span class="k">pdf_health_check</span>: ≥20k chars, ≥15 chunks, avg ≤2500 chars, ≥50% article-bearing. Broken-font &amp; image-only PDFs are rejected here.',
+   focus:[
+     {at:0.5, cam:[-98,0,-52,58,0.55,1.10], tag:'Step 1', ttl:'A raw law document', body:'Each PDF/TXT/HTML is loaded. Real example: <span class="k">code-famille-70-03.pdf</span> → ~48k characters of Arabic legal text.'},
+     {at:5.5, cam:[-96,10,-50,30,0.75,1.15], tag:'Step 2', ttl:'The health gate', body:'<span class="k">pdf_health_check</span> rejects anything with &lt;20k chars, &lt;15 chunks, or &gt;50% chunks missing an article marker. Two files fail here.'},
+     {at:9.5, cam:[-98,0,-52,58,0.55,1.10], tag:'Step 3', ttl:'9 documents kept', body:'Only clean, article-bearing files survive → the 9-law corpus that everything downstream uses.'},
+   ],
+   update(){docs.forEach((d,i)=>{d.mesh.position.y=d.base.y+Math.sin(t*1.6+i)*0.3;
+     d.mesh.rotation.y=Math.sin(t*0.8+i)*0.1;});showFlows(['docs'],t>1.2);}},
+  {id:'chunk',dur:14000,
+   caption:'<b>Chunking.</b> Each <span class="k">المادة N</span> marker becomes one chunk; articles longer than 4,000 chars are split into overlapping windows. Example: <span class="ar">« المادة4 الزواج ميثاق تراض وترابط شرعي… »</span>',
+   focus:[
+     {at:0.5, cam:[-78,-8,-40,62,0.60,1.05], tag:'Step 1', ttl:'Scan for article markers', body:'The chunker looks for <span class="k">المادة / مادة / الفصل</span> (and French <span class="k">Article</span>). Each hit starts a new chunk.'},
+     {at:4.5, cam:[-84,-22,-38,30,0.60,1.05], tag:'Step 2', ttl:'One article = one chunk', body:'<span class="ar">« المادة4 الزواج ميثاق تراض وترابط شرعي… »</span> becomes exactly one row. 5,864 chunks total.'},
+     {at:8.5, cam:[-84,-30,-34,26,0.60,1.05], tag:'Step 3', ttl:'Oversized article split', body:'Article 2 is 47,437 chars → cut into <span class="k">4000-char</span> windows with <span class="k">200-char</span> overlap so no sentence is lost at a boundary.'},
+   ],
+   update(){showFlows(['docs'],true);
+     cutGrp.visible=true;
+     const p=smooth(Math.min(1,Math.max(0,(t-1)/3.5)));
+     chunkMat.opacity=p;
+     cutPieces.forEach((pc,i)=>{const d=Math.min(1,Math.max(0,(t-(0.4+i*0.35))/1.2));
+       pc.material.opacity=smooth(d);pc.position.y=-30+smooth(d)*4;pc.rotation.z=(1-smooth(d))*0.6;});
+     const arr=chunkPts.geometry.attributes.position.array;
+     for(let i=0;i<CHUNK_N;i++){const s=chunkStart[i],e=chunkTargets[i];
+       arr[i*3]=s.x+(e.x-s.x)*p;arr[i*3+1]=s.y+(e.y-s.y)*p+Math.sin(t*2+i)*0.2*p;arr[i*3+2]=s.z+(e.z-s.z)*p;}
+     chunkPts.geometry.attributes.position.needsUpdate=true;}},
+  {id:'embed',dur:14000,
+   caption:'<b>Embedding.</b> <span class="k">multilingual-e5-small</span> encodes each chunk into a 384-d unit vector (prefix <span class="k">passage:</span>). Similar meaning → nearby points. Because vectors are unit-length, cosine similarity = dot product.',
+   focus:[
+     {at:0.5, cam:[-8,0,-14,66,0.30,1.02], tag:'Step 1', ttl:'Take one chunk', body:'We follow the same chunk from the previous phase: <span class="ar">« المادة4 الزواج ميثاق تراض… »</span>'},
+     {at:5, cam:[-8,0,-14,22,0.30,1.02], tag:'Step 2', ttl:'Encode to 384 numbers', body:'The model prepends <span class="k">passage: </span> then outputs a 384-d vector, e.g. <span class="k">[0.021, −0.114, 0.087, …]</span>.'},
+     {at:9.5, cam:[-8,0,-14,40,0.30,0.80], tag:'Step 3', ttl:'Why points cluster', body:'Vectors are normalized to <span class="k">‖v‖=1</span>, so each is a point on a sphere. Similar meaning → nearby → cosine = dot product.'},
+   ],
+   update(){showFlows(['docs','chunk'],true);chunkMat.opacity=1;
+     vecGrp.visible=true;
+     const p=smooth(Math.min(1,Math.max(0,(t-1)/3.5)));
+     embMat.opacity=p;
+     const arr=embPts.geometry.attributes.position.array;
+     for(let i=0;i<EMB_N;i++){const src=chunkTargets[i%CHUNK_N],e=embTargets[i];
+       arr[i*3]=src.x+(e.x-src.x)*p;arr[i*3+1]=src.y+(e.y-src.y)*p;arr[i*3+2]=src.z+(e.z-src.z)*p;}
+     embPts.geometry.attributes.position.needsUpdate=true;}},
+  {id:'store',dur:13000,
+   caption:'<b>Storage.</b> Upsert into <span class="k">documents(content, embedding vector(384), law, article)</span> keyed by <span class="k">(law, article, md5(content))</span> — re-ingesting only rewrites changed chunks. No ANN index: an exact scan over 5.2k rows takes ~1 ms.',
+   focus:[
+     {at:0.5, cam:[-4,0,12,72,0.25,1.00], tag:'Step 1', ttl:'The chunk arrives', body:'The chunk text + its 384-d vector are sent to PostgreSQL as one row.'},
+     {at:5, cam:[-4,0,12,26,0.35,0.90], tag:'Step 2', ttl:'One row in the table', body:'<span class="k">documents(content, embedding vector(384), law, article, source)</span> — the vector is stored natively by pgvector.'},
+     {at:9, cam:[-4,0,12,72,0.25,1.00], tag:'Step 3', ttl:'Idempotent upsert', body:'Key <span class="k">(law, article, md5(content))</span> → <span class="k">ON CONFLICT DO UPDATE</span>. Re-ingesting rewrites only changed chunks.'},
+   ],
+   update(){showFlows(['docs','chunk'],true);chunkMat.opacity=1;embMat.opacity=1;
+     dbCyl.material.opacity=0.28+Math.sin(t*2)*0.06;
+     const p=smooth(Math.min(1,Math.max(0,(t-1)/3)));dbP.material.opacity=p;
+     showFlows(['emb'],t>1);dbGroup.rotation.y=Math.sin(t*0.3)*0.1;}},
+  {id:'query',dur:15000,
+   caption:'<b>Query.</b> <span class="ar">« ما هي عقوبة السرقة في المادة 505؟ »</span> is embedded with the <span class="k">query:</span> prefix. Two retrievers run at once: <b>Dense</b> (cosine, LIMIT 40) finds the paraphrased meaning; <b>BM25</b> pins the exact article number.',
+   focus:[
+     {at:0.5, cam:[-96,20,34,34,0.35,1.00], tag:'Step 1', ttl:'The user question', body:'<span class="ar">« ما هي عقوبة السرقة في المادة 505؟ »</span> ("What is the penalty for theft in article 505?")'},
+     {at:4.5, cam:[-96,20,34,20,0.35,1.00], tag:'Step 2', ttl:'Embed with query:', body:'The question gets the <span class="k">query: </span> prefix (not <span class="k">passage:</span>), then is encoded to its own 384-d vector.'},
+     {at:9, cam:[-4,10,22,132,0.42,1.00], tag:'Step 3', ttl:'Two searches in parallel', body:'<b>Dense</b> (cosine, LIMIT 40) + <b>BM25</b> (exact "المادة 505"). Both run at once and each returns ~40 candidates.'},
+   ],
+   update(){showFlows(['docs','chunk','emb'],true);chunkMat.opacity=1;embMat.opacity=1;dbP.material.opacity=1;
+     cosGrp.visible=true;cosTop='cosine(q, chunk)';
+     cosVal=0.30+0.60*smooth(Math.min(1,Math.max(0,(t-1)/4)));
+     if(Math.floor(t*4)!==Math.floor((t-0.05)*4))updateCosLbl();
+     userGrp.visible=true;userBall.position.y=20+Math.sin(t*2)*0.6;userBall.rotation.y=t;
+     showFlows(['dense','bm25'],t>1);
+     denseSlots.forEach((s,i)=>{s.mesh.material.opacity=i<10?0.95:0.28;s.mesh.position.y=(20-i*3)+Math.sin(t*3+i)*0.3;});
+     bmSlots.forEach((s,i)=>{s.mesh.material.opacity=i<10?0.95:0.28;s.mesh.position.y=(20-i*3)+Math.cos(t*3+i)*0.3;});}},
+  {id:'cosine',dur:15000,
+   caption:'<b>Cosine similarity</b> = <span class="k">1 − (embedding ≤> query)</span>, in [0,1]. The nearest cluster scores highest (e.g. الفصل 505 = 0.88). A chunk is admitted if <span class="k">sim ≥ 0.78</span>, OR it is a strong BM25 hit.',
+   focus:[
+     {at:0.5, cam:[-4,10,22,138,0.42,0.92], tag:'Step 1', ttl:'Compute sim for each candidate', body:'For every candidate chunk: <span class="k">sim = q · k</span> (dot product, since both are unit vectors).'},
+     {at:5, cam:[-4,0,-14,50,0.30,0.92], tag:'Step 2', ttl:'The winner: article 505', body:'The chunk holding <span class="ar">الفصل 505</span> scores <span class="k">0.88</span> — above the <span class="k">0.78</span> threshold, so it is admitted.'},
+     {at:9.5, cam:[-4,10,22,138,0.42,0.92], tag:'Step 3', ttl:'Weak matches dropped', body:'A chunk at <span class="k">0.41</span> fails the gate. Only chunks with <span class="k">sim ≥ 0.78</span> (or a strong BM25 hit) survive.'},
+   ],
+   update(){showFlows(['docs','chunk','emb','dense','bm25'],true);chunkMat.opacity=1;embMat.opacity=1;dbP.material.opacity=1;
+     cosGrp.visible=true;
+     const r=(t*0.8)%1;
+     // sweep 0.88 → 0.41: pick nearest cluster, show sim for the "current" candidate
+     const sweep=0.88-0.47*r;
+     cosTop='sim = q · k   (candidate)';
+     cosVal=sweep;
+     if(Math.floor(t*4)!==Math.floor((t-0.05)*4))updateCosLbl();
+     userGrp.visible=true;userBall.rotation.y=t;
+     denseSlots.forEach((s,i)=>{s.mesh.material.opacity=0.35+0.6*smooth(Math.max(0,1-Math.abs(i/11-r)*3.2));});
+     bmSlots.forEach((s,i)=>{s.mesh.material.opacity=0.35+0.6*smooth(Math.max(0,1-Math.abs(i/11-r)*3.2));});}},
+  {id:'rrf',dur:15000,
+   caption:'<b>RRF fusion.</b> A cosine score [0,1] and a BM25 score [0,30+] cannot be averaged fairly, so only the <b>rank</b> is kept: <span class="k">Σ 1/(60+rank)</span>, wᵈ=1.0, wᵇ=0.35. The top 10 fused chunks become the context.',
+   focus:[
+     {at:0.5, cam:[-4,6,16,78,0.30,1.00], tag:'Step 1', ttl:'Two ranked lists', body:'Dense gives a ranked list, BM25 gives another. Their raw scores are on completely different scales.'},
+     {at:5, cam:[-2,3,12,34,0.30,1.00], tag:'Step 2', ttl:'Fuse by rank only', body:'<span class="k">RRF = Σ 1/(60 + rank)</span>, weighted <span class="k">wᵈ=1.0</span>, <span class="k">wᵇ=0.35</span>. Article 505 appears high in both → rises to the top.'},
+     {at:9.5, cam:[-4,6,16,78,0.30,1.00], tag:'Step 3', ttl:'Top 10 chosen', body:'The 10 highest fused chunks become the context passed to the LLM.'},
+   ],
+   update(){showFlows(['docs','chunk','emb','dense','bm25'],true);chunkMat.opacity=1;embMat.opacity=1;dbP.material.opacity=1;
+     userGrp.visible=true;userBall.rotation.y=t;
+     denseSlots.forEach(s=>s.mesh.material.opacity=0.7);bmSlots.forEach(s=>s.mesh.material.opacity=0.7);
+     showFlows(['fuse'],t>0.8);rrfBlock.rotation.y=t*0.6;
+     rrfBlock.material.emissiveIntensity=0.45+Math.sin(t*3)*0.22;}},
+  {id:'crag',dur:14000,
+   caption:'<b>Corrective RAG</b> — fires only when the best dense similarity &lt; 0.78. It fetches fresh text from trusted Moroccan sources (<span class="k">adala → ism → ddg</span>, .ma only) and keeps fragments whose stem-overlap relevance ≥ 0.25 (max 3).',
+   focus:[
+     {at:0.5, cam:[-58,-10,22,64,0.55,1.05], tag:'Step 1', ttl:'Is the DB answer weak?', body:'If the best dense similarity is <span class="k">&lt; 0.78</span>, the corpus does not clearly cover the question → go online.'},
+     {at:5, cam:[-58,-14,20,30,0.55,1.05], tag:'Step 2', ttl:'Fetch from trusted sites', body:'Tries <span class="k">adala → ism → ddg</span>, allowlist <span class="k">.ma</span> only. Keeps fragments with stem-overlap <span class="k">≥ 0.25</span>.'},
+     {at:9.5, cam:[-58,-10,22,64,0.55,1.05], tag:'Step 3', ttl:'Cap at 3, tag sources', body:'At most 3 live chunks, tagged <span class="k">[web]</span>. Real trap: a theft question once returned "تبادل المعطيات" — caught by the relevance gate.'},
+   ],
+   update(){showFlows(['docs','chunk','emb','dense','bm25','fuse','crag'],true);
+     chunkMat.opacity=1;embMat.opacity=1;dbP.material.opacity=1;userGrp.visible=true;
+     cragEdges.material.opacity=0.35+0.45*Math.abs(Math.sin(t*3));
+     rrfBlock.rotation.y=t*0.6;}},
+  {id:'ctx',dur:13000,
+   caption:'<b>Augmentation.</b> The 10 retained chunks are formatted as <span class="k">[law — المادة N]</span> and injected into a prompt with strict grounding rules: answer only from context, name the law, never mix laws.',
+   focus:[
+     {at:0.5, cam:[16,3,30,66,0.28,1.02], tag:'Step 1', ttl:'Collect the top 10', body:'The 10 fused chunks from the previous steps are gathered as the evidence set.'},
+     {at:5, cam:[24,3,34,30,0.28,1.02], tag:'Step 2', ttl:'Label each fragment', body:'Each is formatted <span class="k">[law — المادة N]</span> so the model can cite the exact source law and article.'},
+     {at:9, cam:[16,3,30,66,0.28,1.02], tag:'Step 3', ttl:'Add grounding rules', body:'System prompt: <i>answer only from context</i>, <i>name the law</i>, <i>SUBJECT-MATCH GATE</i> (right law ≠ wrong topic), never mix laws.'},
+   ],
+   update(){showFlows(['docs','chunk','emb','dense','bm25','fuse','ctx'],true);
+     chunkMat.opacity=1;embMat.opacity=1;dbP.material.opacity=1;userGrp.visible=true;
+     rrfBlock.rotation.y=t*0.6;const p=smooth(Math.min(1,Math.max(0,(t-1)/2)));ctxCard.material.opacity=p*0.28;}},
+  {id:'gen',dur:15000,
+   caption:'<b>Generation.</b> <span class="k">gemini-3.1-flash-lite</span> reads the augmented prompt and answers with law-qualified citations: <span class="ar">« الفصل 505 — الحبس من سنة إلى خمس سنوات »</span>. Answer + sources + follow-ups go back to the chat UI.',
+   focus:[
+     {at:0.5, cam:[55,3,56,78,0.30,1.02], tag:'Step 1', ttl:'Prompt reaches Gemini', body:'The augmented prompt (10 labelled chunks + rules) is sent to <span class="k">gemini-3.1-flash-lite</span>, with 2 fallback models.'},
+     {at:5, cam:[50,4,58,26,0.30,1.02], tag:'Step 2', ttl:'Grounded generation', body:'The model may use <b>only</b> the supplied context — it cannot invent law. It names the source law on every claim.'},
+     {at:9.5, cam:[55,3,56,78,0.30,1.02], tag:'Step 3', ttl:'Answer with citations', body:'<span class="ar">« الفصل 505 — الحبس من سنة إلى خمس سنوات »</span> + sources + follow-up questions, back to the chat.'},
+   ],
+   update(){showFlows(['docs','chunk','emb','dense','bm25','fuse','ctx','gen'],true);
+     chunkMat.opacity=1;embMat.opacity=1;dbP.material.opacity=1;userGrp.visible=true;
+     rrfBlock.rotation.y=t*0.6;ctxCard.material.opacity=0.28;
+     gemOrb.rotation.y=t*0.7;gemOrb.rotation.x=t*0.35;gemOrb.material.emissiveIntensity=1.0+Math.sin(t*3)*0.35;
+     showFlows(['gen'],t>0.6);
+     const p=smooth(Math.min(1,Math.max(0,(t-2)/2)));ansCard.material.opacity=p*0.32;}},
+];
+
+/* ================================================================== *
+ *  UI
+ * ================================================================== */
+const stagesEl=document.getElementById('stages');
+const dotsEl=document.getElementById('dots');
+const captionEl=document.getElementById('caption');
+const inspBody=document.getElementById('inspBody');
+const inspTitle=document.getElementById('inspTitle');
+const inspSub=document.getElementById('inspSub');
+const btnPlay=document.getElementById('play');
+const inspector=document.getElementById('inspector');
+const phaseEl=document.getElementById('phase');
+const phaseNum=document.getElementById('phaseNum');
+const phaseName=document.getElementById('phaseName');
+const phaseSub=document.getElementById('phaseSub');
+const flashEl=document.getElementById('flash');
+const mechEl=document.getElementById('mech');
+const popupEl=document.getElementById('popup');
+const popTag=document.getElementById('popTag');
+const popTtl=document.getElementById('popTtl');
+const popBody=document.getElementById('popBody');
+const popCount=document.getElementById('popCount');
+let focusIdx=-1;
+function setFocus(scene){
+  const F=scene.focus;
+  if(!F||!F.length){ focusIdx=-1; popupEl.classList.remove('show'); return; }
+  const time=t;
+  let idx=0; for(let i=0;i<F.length;i++){ if(time>=F[i].at) idx=i; }
+  const step=F[idx];
+  if(idx!==focusIdx){
+    focusIdx=idx;
+    controls.flyTo(step.cam[0],step.cam[1],step.cam[2],step.cam[3],step.cam[4],step.cam[5],0.05);
+    popTag.textContent=step.tag||'Focus';
+    popTtl.innerHTML=step.ttl||'';
+    popBody.innerHTML=step.body||'';
+    popCount.textContent=`${idx+1}/${F.length}`;
+    popupEl.classList.add('show');
+    blip(idx%2?740:620,0.09,'sine',0.05);
+  }
+}
+
+SCENES.forEach((s,i)=>{
+  const b=document.createElement('button');
+  const M=STAGE_META[s.id]||{name:s.id};
+  b.textContent=(i===0?'0 · Overview':`${i} · ${M.name.split(' · ')[1]||s.id}`);
+  b.onclick=()=>go(i,0);stagesEl.appendChild(b);
+  const d=document.createElement('button');d.onclick=()=>go(i,0);d.title=M.name;dotsEl.appendChild(d);
+});
+
+function renderInspector(id){
+  const D=INSPECT[id]||INSPECT.overview;
+  inspTitle.textContent=D.title;inspSub.textContent=D.sub;
+  let html='';
+  D.fields.forEach(([n,v])=>{html+=`<div class="field"><div class="name">${n}</div><div class="val">${v}</div></div>`;});
+  if(D.bars){
+    const mx=Math.max(...D.bars.map(b=>b[2]));
+    D.bars.forEach(([l,v,m])=>{const pc=Math.round(v/m*100);
+      const col=pc>70?'#2fd6a0':pc>45?'#ffb454':'#ff5d8f';
+      html+=`<div class="bar-row"><span class="lbl">${l}</span><span class="track"><span class="fill" style="width:${pc}%;background:${col}"></span></span><span class="num">${typeof v==='number'&&v<1?v.toFixed(2):v}</span></div>`;});
+  }
+  inspBody.innerHTML=html;
+}
+
+/* mechanism strip: all stages shown, the current one highlighted */
+function renderMech(id){
+  const curIdx=STAGE_ORDER.indexOf(id);
+  let html='';
+  STAGE_ORDER.forEach((sid,i)=>{
+    const M=STAGE_META[sid]; if(!M) return;
+    const state=i<curIdx?'done':i===curIdx?'active':'';
+    html+=`<div class="step ${state}"><span class="dot"></span>${M.name.split(' · ').slice(-1)}</div>`;
+    if(i<STAGE_ORDER.length-1) html+=`<span class="arrow">→</span>`;
+  });
+  mechEl.innerHTML=html;
+}
+
+let current=0,playing=false,timer=null,sceneDur=SCENES[0].dur,remain=0,t0=0,lastDir=1,phaseTimer=null;
+
+function refreshUI(){
+  [...stagesEl.children].forEach((b,i)=>b.classList.toggle('on',i===current));
+  [...dotsEl.children].forEach((b,i)=>b.classList.toggle('on',i===current));
+  captionEl.innerHTML=SCENES[current].caption;
+  renderInspector(SCENES[current].id);
+  renderMech(SCENES[current].id);
+}
+
+function showPhase(id){
+  const M=STAGE_META[id]||{name:id,sub:'',steps:[]};
+  phaseNum.textContent=(STAGE_ORDER.indexOf(id));
+  phaseName.textContent=M.name;
+  phaseSub.textContent=M.sub||'';
+  phaseEl.classList.add('show');
+  clearTimeout(phaseTimer);
+  phaseTimer=setTimeout(()=>phaseEl.classList.remove('show'),1500);
+}
+function flash(){
+  flashEl.classList.add('go');
+  requestAnimationFrame(()=>requestAnimationFrame(()=>flashEl.classList.remove('go')));
+}
+
+function go(i,dir){
+  const prev=current;
+  current=(i+SCENES.length)%SCENES.length;
+  lastDir=(dir!==undefined&&dir!==0)?dir:(current===prev?lastDir:(current>prev||prev===SCENES.length-1&&current===0?1:-1));
+  t=0;resetAll();focusIdx=-1;popupEl.classList.remove('show');
+  sceneDur=SCENES[current].dur;remain=sceneDur;refreshUI();
+  const C=CAM[SCENES[current].id]||CAM.overview;
+  controls.flyTo(C[0],C[1],C[2],C[3],C[4],C[5],0.055);
+  showPhase(SCENES[current].id);flash();
+  if(soundOn) stageSound(lastDir);
+  if(playing) arm(sceneDur);
+}
+function arm(ms){clearTimeout(timer);t0=performance.now();timer=setTimeout(()=>{
+  if(document.getElementById('auto').checked)go(current+1,1);
+  else{remain=0;setPaused(true);}
+},ms);}
+function setPaused(p){
+  playing=!p;btnPlay.textContent=p?'▶ Play / ❚❚ Pause':'▶ Play / ❚❚ Pause';clearTimeout(timer);
+  if(!p){ensureAudio();arm(remain>0?remain:sceneDur);}
+  else if(sceneDur>0)remain=Math.max(0,sceneDur-(performance.now()-t0));
+}
+btnPlay.onclick=()=>setPaused(!playing);
+document.getElementById('prev').onclick=()=>go(current-1,-1);
+document.getElementById('next').onclick=()=>go(current+1,1);
+document.getElementById('replay').onclick=()=>go(current,0);
+document.getElementById('auto').onchange=()=>{if(playing&&document.getElementById('auto').checked)arm(remain);};
+document.getElementById('toggleInspector').onclick=()=>inspector.classList.toggle('open');
+addEventListener('keydown',e=>{
+  if(e.key===' '){e.preventDefault();setPaused(!playing);}
+  if(e.key==='ArrowRight')go(current+1,1);
+  if(e.key==='ArrowLeft')go(current-1,-1);
+  if(e.key==='r'||e.key==='R')go(current,0);
+  if(e.key==='m'||e.key==='M'){soundOn=!soundOn;if(soundOn)blip(660,0.12,'sine',0.1);}
+});
+
+/* ================================================================== *
+ *  LOOP
+ * ================================================================== */
+let last=performance.now();
+function loop(now){
+  requestAnimationFrame(loop);
+  const dt=(now-last)/1000;last=now;
+  if(playing)t+=dt;
+  SCENES[current].update();
+  setFocus(SCENES[current]);
+  Object.values(flows).forEach(a=>a.forEach(f=>{if(f.visible)f.update(t);}));
+  controls.tick(dt);
+  renderer.render(scene,camera);
+}
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+
+inspector.classList.add('open');
+const hashId=(location.hash||'').replace('#','');
+let startIdx=SCENES.findIndex(s=>s.id===hashId);
+if(startIdx<0) startIdx=0;
+go(startIdx,0);
+setPaused(false);
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

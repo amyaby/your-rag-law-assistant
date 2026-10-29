@@ -160,6 +160,13 @@ def article_chunks(text: str, law: str, source: str = "") -> list[dict]:
 
     if not matches:
         # No article markers → fall back to word chunks
+        """{
+    "law": "Example Labour Code",
+    "article": "Example article number",
+    "content": "The actual text extracted from the legal article...",
+    "source": "original PDF source",
+    "embedding": [0.012, -0.084, 0.031, ...]
+}"""
         return [
             {"law": law, "article": "", "source": source, "content": normalize_arabic(t)}
             for t in chunk_text(text)

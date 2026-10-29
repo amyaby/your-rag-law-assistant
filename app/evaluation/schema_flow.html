@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Schema &amp; Pipelines — Playable Flow Diagrams</title>
+<style>
+  :root{
+    --bg:#0b1020; --panel:#121a33; --panel2:#0f1730;
+    --txt:#e8edff; --muted:#93a0c8; --border:#23305a;
+    --blue:#7c9cff; --green:#2fd6a0; --amber:#ffb454;
+    --pink:#ff5d8f; --purple:#c78bff;
+    --pd:20s;
+  }
+  *{box-sizing:border-box}
+  html,body{min-height:100%}
+  body{
+    margin:0;background:
+      radial-gradient(1200px 600px at 8% -10%, #1b2450 0%, transparent 60%),
+      radial-gradient(1000px 520px at 110% 8%, #2a1740 0%, transparent 55%),
+      var(--bg);
+    color:var(--txt);
+    font-family:ui-sans-serif,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.5;
+  }
+  a{color:var(--purple);text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  header{max-width:1180px;margin:0 auto;padding:26px 20px 4px;text-align:center}
+  h1{margin:0 0 6px;font-size:clamp(22px,3.3vw,34px);letter-spacing:-.5px}
+  .sub{color:var(--muted);font-size:14.5px;max-width:820px;margin:0 auto}
+  .progress{height:6px;background:#1a2450;border-radius:999px;overflow:hidden;margin:16px auto 0;max-width:820px}
+  .progress i{display:block;height:100%;width:0;border-radius:999px;background:linear-gradient(90deg,var(--purple),var(--green));
+    animation:grow linear forwards;animation-duration:var(--pd);animation-play-state:paused}
+  body:not(.paused) .progress i{animation-play-state:running}
+  @keyframes grow{to{width:100%}}
+
+  main{max-width:1180px;margin:0 auto;padding:18px 20px 118px}
+  .slide{display:none;background:linear-gradient(180deg,var(--panel),var(--panel2));
+    border:1px solid var(--border);border-radius:18px;padding:20px 22px 22px;
+    box-shadow:0 12px 34px rgba(0,0,0,.4);position:relative;overflow:hidden}
+  .slide::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:var(--accent)}
+  .slide.active{display:block;animation:slideIn .45s ease}
+  @keyframes slideIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+
+  .shead{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .num{width:34px;height:34px;border-radius:10px;background:#1a2450;border:1px solid var(--accent);
+    color:var(--accent);font-weight:800;display:flex;align-items:center;justify-content:center;font-size:16px}
+  .shead h2{margin:0;font-size:21px}
+  .tag{font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;
+    padding:4px 10px;border-radius:999px;border:1px solid var(--accent);color:var(--accent)}
+  .stage{margin-top:14px;background:#0a1226;border:1px solid #1d2852;border-radius:14px;padding:6px 8px}
+  svg.flow{width:100%;height:auto;display:block}
+
+  /* nodes & wires */
+  .node rect{fill:#141d3d;stroke:#33427c;stroke-width:1.5}
+  .node text{fill:#e8edff;font-size:12.5px;font-weight:700;text-anchor:middle;dominant-baseline:middle}
+  .node text.small{font-size:10px;font-weight:500;fill:var(--muted)}
+  .wire{stroke:#3a4a86;stroke-width:2;fill:none;marker-end:url(#arr)}
+  .wire.g{stroke:var(--green);marker-end:url(#arrg)}
+  .wire.r{stroke:var(--pink);marker-end:url(#arrr)}
+  .wire.p{stroke:var(--purple);marker-end:url(#arrp)}
+  .wire.dash{stroke-dasharray:6 6}
+  .wire.soft{opacity:.55}
+  .lbl{fill:var(--muted);font-size:10.5px;text-anchor:middle}
+  .lbl.g{fill:var(--green)}
+  .lbl.r{fill:var(--pink)}
+
+  .pkt{offset-rotate:0deg;animation:travel var(--dur,1.3s) var(--delay,0s) linear infinite;
+    filter:drop-shadow(0 0 6px currentColor);animation-play-state:paused}
+  body:not(.paused) .slide.active .pkt{animation-play-state:running}
+  @keyframes travel{from{offset-distance:0%}to{offset-distance:100%}}
+
+  .anim{animation-play-state:paused!important;animation-fill-mode:both}
+  body:not(.paused) .slide.active .anim{animation-play-state:running!important}
+  .node.anim,.card.anim,.rel.anim,polygon.anim{animation:pop .5s var(--delay,0s) both}
+  @keyframes pop{from{opacity:0;transform:translateY(8px) scale(.97)}to{opacity:1;transform:none}}
+  .narr li.anim,.verdict.anim,.foot.anim{animation:fadeUp .5s var(--delay,0s) both}
+  @keyframes fadeUp{from{opacity:0;transform:translateX(-14px)}to{opacity:1;transform:none}}
+
+  .narr{list-style:none;margin:14px 0 0;padding:0;display:grid;gap:8px}
+  .narr li{display:flex;gap:10px;align-items:flex-start;font-size:13.8px;color:#d5ddff;
+    background:#101a3a;border:1px solid #22305c;border-radius:10px;padding:9px 12px}
+  .narr li b{color:var(--accent);font-weight:800}
+  .narr li::before{content:"▸";color:var(--accent);font-weight:800;line-height:1.4}
+  .verdict{margin-top:12px;font-size:13.6px;color:#cdd7ff;background:#0e1734;
+    border-left:3px solid var(--accent);border-radius:8px;padding:9px 13px}
+  .verdict b{color:var(--accent)}
+
+  /* schema forms */
+  .schema-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:16px}
+  .card{background:linear-gradient(180deg,#121a33,#0f1730);border:1px solid var(--border);
+    border-radius:14px;overflow:hidden;display:flex;flex-direction:column}
+  .chead{display:flex;justify-content:space-between;align-items:center;gap:8px;
+    padding:10px 12px;background:#18224a;border-bottom:1px solid var(--border)}
+  .tname{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-weight:800;font-size:13.5px;color:#e8edff}
+  .rows{font-size:10.5px;color:var(--muted);white-space:nowrap}
+  .frow{display:flex;align-items:center;gap:7px;padding:6px 10px;border-bottom:1px solid #1a2346;font-size:12px}
+  .frow:last-of-type{border-bottom:0}
+  .fname{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;color:#cfe0ff;min-width:104px;font-size:11.8px}
+  .ftype{color:var(--muted);margin-left:auto;text-align:right;font-size:10.8px}
+  .badge{font-size:9px;font-weight:800;letter-spacing:.4px;padding:2px 5px;border-radius:6px;border:1px solid;white-space:nowrap}
+  .pk{color:var(--amber);border-color:#6b5320}
+  .fk{color:var(--blue);border-color:#2f3f7c}
+  .uq{color:var(--green);border-color:#1f5a3a}
+  .vec .ftype{color:var(--purple);font-weight:800}
+  .ifoot{padding:9px 11px 11px;font-size:10.4px;color:var(--muted);line-height:1.45;margin-top:auto}
+  .ifoot b{color:var(--blue);font-weight:700}
+  .rel{margin-top:14px;background:#101a3a;border:1px solid #22305c;border-radius:10px;
+    padding:10px 13px;font-size:12.8px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;color:#cfe0ff;font-size:12px}
+  .arrow{color:var(--green);font-weight:800}
+  .muted{color:var(--muted)}
+  .sep{color:#3a4a86}
+  .foot{margin-top:10px;font-size:11.5px;color:var(--muted)}
+  .foot b{color:var(--amber)}
+  .sql{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11px;color:#cfe0ff}
+
+  /* controls */
+  .controls{position:fixed;left:0;right:0;bottom:0;z-index:50;
+    background:rgba(9,14,32,.92);backdrop-filter:blur(10px);border-top:1px solid var(--border);
+    display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;padding:12px 16px}
+  button{font:inherit;font-size:13.5px;font-weight:600;color:var(--txt);
+    background:#18224a;border:1px solid #2f3f7c;border-radius:10px;padding:8px 14px;cursor:pointer;transition:.15s}
+  button:hover{background:#223069;transform:translateY(-1px)}
+  button.primary{background:linear-gradient(90deg,#5b6cf5,#a45bff);border-color:transparent;min-width:104px}
+  .dots{display:flex;gap:7px;margin-left:6px}
+  .dots button{width:12px;height:12px;min-width:0;padding:0;border-radius:50%;background:#26315f}
+  .dots button.on{background:linear-gradient(90deg,var(--purple),var(--green));transform:scale(1.25)}
+  .auto{font-size:13px;color:var(--muted);display:flex;gap:6px;align-items:center;user-select:none;cursor:pointer}
+  .kbd{font-size:11.5px;color:#6f7db0;margin-left:4px}
+
+  @media (max-width:900px){
+    .schema-grid{grid-template-columns:1fr}
+    .kbd{display:none}
+  }
+</style>
+</head>
+<body class="paused">
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L7,3 L0,6 Z" fill="#3a4a86"/></marker>
+    <marker id="arrg" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L7,3 L0,6 Z" fill="#2fd6a0"/></marker>
+    <marker id="arrr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L7,3 L0,6 Z" fill="#ff5d8f"/></marker>
+    <marker id="arrp" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L7,3 L0,6 Z" fill="#c78bff"/></marker>
+  </defs>
+</svg>
+
+<header>
+  <h1>Schema &amp; Pipelines — playable flow diagrams</h1>
+  <p class="sub">Database schema as forms, then the real pipelines with glowing packets on every wire.
+    <a href="ui_memory_flow.html">Open the sequence UML view &rarr;</a></p>
+  <div class="progress"><i></i></div>
+</header>
+
+<main id="deck">
+
+  <!-- ================= 1 : SCHEMA FORMS ================= -->
+  <section class="slide active" data-dur="22000" style="--accent:#c78bff">
+    <div class="shead"><span class="num">1</span><h2>PostgreSQL schema — forms view</h2>
+      <span class="tag">3 tables · pgvector 0.8.6 · 384-d</span></div>
+
+    <div class="schema-grid">
+      <div class="card anim" style="--delay:.1s">
+        <div class="chead"><span class="tname">documents</span><span class="rows">5,844 rows · 9 laws</span></div>
+        <div class="frow"><span class="fname">id</span><span class="badge pk">PK</span><span class="ftype">integer · serial</span></div>
+        <div class="frow"><span class="fname">content</span><span class="ftype">text</span></div>
+        <div class="frow vec"><span class="fname">embedding</span><span class="badge uq">384-d</span><span class="ftype">vector(384)</span></div>
+        <div class="frow"><span class="fname">law</span><span class="ftype">text</span></div>
+        <div class="frow"><span class="fname">article</span><span class="ftype">text</span></div>
+        <div class="frow"><span class="fname">source</span><span class="ftype">text</span></div>
+        <div class="frow"><span class="fname">version</span><span class="ftype">text</span></div>
+        <div class="ifoot"><b>documents_pkey</b> (id)<br>
+          <b>documents_identity</b> UNIQUE <span class="sql">(law, article, md5(content))</span><br>
+          no vector index: exact scan, 40 candidates</div>
+      </div>
+
+      <div class="card anim" style="--delay:.3s">
+        <div class="chead"><span class="tname">conversations</span><span class="rows">2 rows</span></div>
+        <div class="frow"><span class="fname">id</span><span class="badge pk">PK</span><span class="ftype">text</span></div>
+        <div class="frow"><span class="fname">title</span><span class="ftype">text · not null</span></div>
+        <div class="frow"><span class="fname">created_at</span><span class="ftype">timestamptz · now()</span></div>
+        <div class="ifoot"><b>conversations_pkey</b> (id)<br>
+          referenced by <span class="sql">messages.conversation_id</span><br>
+          title is rewritten to the first 48 chars of the question</div>
+      </div>
+
+      <div class="card anim" style="--delay:.5s">
+        <div class="chead"><span class="tname">messages</span><span class="rows">76 rows</span></div>
+        <div class="frow"><span class="fname">id</span><span class="badge pk">PK</span><span class="ftype">integer · serial</span></div>
+        <div class="frow"><span class="fname">conversation_id</span><span class="badge fk">FK</span><span class="ftype">text → conversations.id</span></div>
+        <div class="frow"><span class="fname">role</span><span class="ftype">text · user | assistant</span></div>
+        <div class="frow"><span class="fname">content</span><span class="ftype">text · not null</span></div>
+        <div class="frow"><span class="fname">created_at</span><span class="ftype">timestamptz · now()</span></div>
+        <div class="ifoot"><b>messages_pkey</b> (id)<br>
+          <b>messages_conversation_idx</b> (conversation_id, id)<br>
+          FK is <span class="sql">ON DELETE CASCADE</span></div>
+      </div>
+    </div>
+
+    <div class="rel anim" style="--delay:.8s">
+      <span class="code">messages.conversation_id</span>
+      <span class="arrow">&rarr;</span>
+      <span class="code">conversations.id</span>
+      <span class="muted">ON DELETE CASCADE</span>
+      <span class="sep">·</span>
+      <span class="muted"><b>documents is standalone:</b> no FK. Citations are built from retrieved metadata at query time and <u>not</u> stored on messages.</span>
+    </div>
+
+    <ul class="narr">
+      <li class="anim" style="--delay:1s"><b>Chat state</b> lives in <span class="code">conversations</span> + <span class="code">messages</span>; the browser only keeps the active conversation id.</li>
+      <li class="anim" style="--delay:1.4s"><b>Knowledge state</b> lives in <span class="code">documents</span>: one row per chunk, embedding included, idempotent by law + article + content hash.</li>
+      <li class="anim" style="--delay:1.8s"><b>Five indexes total</b> — and <b>no HNSW / IVFFlat</b>: with 5,844 rows the exact <span class="sql">&lt;=&gt;</span> scan is fast and always exact.</li>
+    </ul>
+
+    <div class="foot anim" style="--delay:2.2s"><b>Note:</b> live counts queried from the running database.
+      <span class="code">conversations_backup</span> / <span class="code">messages_backup</span> are manual leftovers, not created by the app.</div>
+  </section>
+
+  <!-- ================= 2 : INGESTION ================= -->
+  <section class="slide" data-dur="18000" style="--accent:#2fd6a0">
+    <div class="shead"><span class="num">2</span><h2>Ingestion pipeline</h2>
+      <span class="tag">documents &rarr; chunks &rarr; 384-d vectors</span></div>
+
+    <div class="stage">
+      <svg class="flow" viewBox="0 0 960 280" aria-label="Ingestion flow">
+        <g class="node anim" style="--delay:.1s">
+          <rect x="20" y="100" width="150" height="80" rx="12" style="stroke:#c78bff"/>
+          <text x="95" y="122">Documents</text>
+          <text x="95" y="144" class="small">PDF · TXT · HTML</text>
+          <text x="95" y="160" class="small">9 laws on disk</text>
+        </g>
+        <g class="node anim" style="--delay:.4s">
+          <rect x="210" y="100" width="150" height="80" rx="12" style="stroke:#7c9cff"/>
+          <text x="285" y="122">load_document</text>
+          <text x="285" y="144" class="small">PyMuPDF per page</text>
+          <text x="285" y="160" class="small">BS4 strips chrome</text>
+        </g>
+        <g class="node anim" style="--delay:.7s">
+          <rect x="400" y="95" width="180" height="90" rx="12" style="stroke:#2fd6a0"/>
+          <text x="490" y="117">normalize + split</text>
+          <text x="490" y="139" class="small">NFKC · Arabic markers</text>
+          <text x="490" y="155" class="small">المادة / الفصل / مادة</text>
+          <text x="490" y="171" class="small">fallback: 100 words</text>
+        </g>
+        <g class="node anim" style="--delay:1s">
+          <rect x="620" y="100" width="160" height="80" rx="12" style="stroke:#7c9cff"/>
+          <text x="700" y="122">window + embed</text>
+          <text x="700" y="144" class="small">4000 chars · 200 overlap</text>
+          <text x="700" y="160" class="small">e5-small · passage:</text>
+        </g>
+        <g class="node anim" style="--delay:1.3s">
+          <rect x="820" y="100" width="120" height="80" rx="12" style="stroke:#ffb454"/>
+          <text x="880" y="122">INSERT</text>
+          <text x="880" y="144" class="small">ON CONFLICT</text>
+          <text x="880" y="160" class="small">DO UPDATE</text>
+        </g>
+
+        <path class="wire g" d="M170,140 L210,140"/>
+        <path class="wire g" d="M360,140 L400,140"/>
+        <path class="wire" d="M580,140 L620,140"/>
+        <path class="wire" d="M780,140 L820,140"/>
+
+        <g class="node anim" style="--delay:1.6s">
+          <rect x="310" y="218" width="360" height="34" rx="10" style="stroke:#2f3f7c"/>
+          <text x="490" y="235" class="small">pdf_health_check: ≥20k chars · ≥15 chunks · articles/chunks ≥0.5</text>
+        </g>
+        <g class="node anim" style="--delay:1.9s">
+          <rect x="700" y="218" width="240" height="34" rx="10" style="stroke:#6b5320"/>
+          <text x="820" y="235" class="small">unique key: law · article · md5(content)</text>
+        </g>
+        <g class="node anim" style="--delay:2.2s">
+          <rect x="20" y="218" width="260" height="34" rx="10" style="stroke:#3a4a86"/>
+          <text x="150" y="235" class="small">BM25 cache invalidated after insert</text>
+        </g>
+        <path class="wire dash soft" d="M880,180 Q880,205 240,235" />
+        <path class="wire dash soft" d="M490,185 L490,218" />
+
+        <text class="lbl" x="190" y="128">read</text>
+        <text class="lbl" x="380" y="128">text</text>
+        <text class="lbl" x="600" y="128">articles</text>
+        <text class="lbl" x="800" y="128">vectors</text>
+
+        <circle class="pkt" r="6" fill="#2fd6a0" style="color:#2fd6a0;offset-path:path('M170,140 L210,140');--delay:.6s;--dur:1.1s"/>
+        <circle class="pkt" r="6" fill="#2fd6a0" style="color:#2fd6a0;offset-path:path('M360,140 L400,140');--delay:1.8s;--dur:1.1s"/>
+        <circle class="pkt" r="6" fill="#7c9cff" style="color:#7c9cff;offset-path:path('M580,140 L620,140');--delay:3s;--dur:1.2s"/>
+        <circle class="pkt" r="6" fill="#7c9cff" style="color:#7c9cff;offset-path:path('M580,140 L620,140');--delay:4.1s;--dur:1.2s"/>
+        <circle class="pkt" r="6" fill="#ffb454" style="color:#ffb454;offset-path:path('M780,140 L820,140');--delay:4.6s;--dur:1s"/>
+        <circle class="pkt" r="6" fill="#ffb454" style="color:#ffb454;offset-path:path('M780,140 L820,140');--delay:5.8s;--dur:1s"/>
+        <circle class="pkt" r="5" fill="#2fd6a0" style="color:#2fd6a0;offset-path:path('M880,180 Q880,205 240,235');--delay:6.8s;--dur:2.2s"/>
+      </svg>
+    </div>
+
+    <ul class="narr">
+      <li class="anim" style="--delay:.4s"><b>Article-aware chunking first:</b> split at <span class="sql">المادة / الفصل / مادة</span>, keep the marker in the content, and only fall back to word windows when no markers exist.</li>
+      <li class="anim" style="--delay:.8s"><b>Health gate:</b> a PDF with too little text or a bad article/chunk ratio is rejected before it pollutes retrieval.</li>
+      <li class="anim" style="--delay:1.2s"><b>Idempotent writes:</b> re-ingesting the same law updates changed chunks and skips identical ones; the BM25 cache is dropped so it rebuilds on the next query.</li>
+    </ul>
+    <div class="verdict anim" style="--delay:1.6s"><b>Result:</b> 5,844 chunks across 9 laws, all embedded locally with <b>e5-small (384-d)</b> — free, offline, and no API quota wall.</div>
+  </section>
+
+  <!-- ================= 3 : RETRIEVAL ================= -->
+  <section class="slide" data-dur="24000" style="--accent:#7c9cff">
+    <div class="shead"><span class="num">3</span><h2>Retrieval pipeline</h2>
+      <span class="tag">dense + BM25 &rarr; RRF &rarr; CRAG gate</span></div>
+
+    <div class="stage">
+      <svg class="flow" viewBox="0 0 960 360" aria-label="Retrieval flow">
+        <g class="node anim" style="--delay:.1s">
+          <rect x="16" y="100" width="110" height="60" rx="12" style="stroke:#c78bff"/>
+          <text x="71" y="122">User</text>
+          <text x="71" y="142" class="small">question</text>
+        </g>
+        <g class="node anim" style="--delay:.3s">
+          <rect x="146" y="100" width="120" height="60" rx="12" style="stroke:#c78bff"/>
+          <text x="206" y="122">Browser</text>
+          <text x="206" y="142" class="small">app.js</text>
+        </g>
+        <g class="node anim" style="--delay:.5s">
+          <rect x="296" y="90" width="140" height="80" rx="12" style="stroke:#2fd6a0"/>
+          <text x="366" y="112">FastAPI</text>
+          <text x="366" y="134" class="small">POST /ask</text>
+          <text x="366" y="150" class="small">memory + orchestration</text>
+        </g>
+        <g class="node anim" style="--delay:.7s">
+          <rect x="470" y="10" width="170" height="54" rx="12" style="stroke:#ff5d8f"/>
+          <text x="555" y="28">Gemini rephrase</text>
+          <text x="555" y="46" class="small">only for Darija / Latin script</text>
+        </g>
+        <g class="node anim" style="--delay:.9s">
+          <rect x="470" y="130" width="170" height="60" rx="12" style="stroke:#2fd6a0"/>
+          <text x="555" y="152">e5 query embed</text>
+          <text x="555" y="172" class="small">query: · 384-d</text>
+        </g>
+        <g class="node anim" style="--delay:1.1s">
+          <rect x="680" y="58" width="150" height="54" rx="12" style="stroke:#7c9cff"/>
+          <text x="755" y="76">Dense</text>
+          <text x="755" y="96" class="small">&lt;=&gt; LIMIT 40</text>
+        </g>
+        <g class="node anim" style="--delay:1.3s">
+          <rect x="680" y="148" width="150" height="54" rx="12" style="stroke:#ffb454"/>
+          <text x="755" y="166">BM25</text>
+          <text x="755" y="186" class="small">k1 1.5 · b 0.75</text>
+        </g>
+        <g class="node anim" style="--delay:1.5s">
+          <rect x="850" y="95" width="96" height="70" rx="12" style="stroke:#2fd6a0"/>
+          <text x="898" y="120">RRF</text>
+          <text x="898" y="140" class="small">k=60</text>
+          <text x="898" y="155" class="small">1.0 / 0.35</text>
+        </g>
+        <polygon class="anim" style="--delay:1.7s;fill:#141d3d;stroke:#7c9cff;stroke-width:1.5" points="890,192 948,230 890,268 832,230"/>
+        <text x="890" y="224" fill="#e8edff" font-size="10.5" font-weight="700" text-anchor="middle">best dense</text>
+        <text x="890" y="239" fill="#e8edff" font-size="10.5" font-weight="700" text-anchor="middle">&lt; 0.78?</text>
+        <g class="node anim" style="--delay:1.9s">
+          <rect x="600" y="200" width="170" height="60" rx="12" style="stroke:#ff5d8f"/>
+          <text x="685" y="218">CRAG fetch</text>
+          <text x="685" y="238" class="small">adala · ism · web</text>
+          <text x="685" y="252" class="small">parallel · 8s timeout</text>
+        </g>
+        <g class="node anim" style="--delay:2.1s">
+          <rect x="760" y="292" width="180" height="44" rx="10" style="stroke:#2fd6a0"/>
+          <text x="850" y="308">context</text>
+          <text x="850" y="324" class="small">top-k chunks + sources</text>
+        </g>
+
+        <path class="wire p" d="M126,130 L146,130"/>
+        <path class="wire p" d="M266,130 L296,130"/>
+        <path class="wire r" d="M366,90 Q366,50 470,37"/>
+        <path class="wire r" d="M555,64 L555,130"/>
+        <path class="wire" d="M436,130 L470,130"/>
+        <path class="wire g" d="M640,148 Q660,120 680,95"/>
+        <path class="wire g" d="M640,172 Q660,180 680,175"/>
+        <path class="wire" d="M830,85 Q845,90 850,110"/>
+        <path class="wire" d="M830,175 Q845,165 850,150"/>
+        <path class="wire" d="M898,165 L890,192"/>
+        <path class="wire r" d="M832,230 L770,230"/>
+        <path class="wire r" d="M685,260 Q685,314 760,314"/>
+        <path class="wire g" d="M890,268 L850,292"/>
+
+        <text class="lbl" x="136" y="120">ask</text>
+        <text class="lbl" x="281" y="120">HTTP</text>
+        <text class="lbl" x="420" y="62">rephrase</text>
+        <text class="lbl" x="563" y="100">query:</text>
+        <text class="lbl" x="655" y="118">dense</text>
+        <text class="lbl" x="655" y="195">BM25</text>
+        <text class="lbl g" x="800" y="219">yes · fetch</text>
+        <text class="lbl g" x="858" y="287">no</text>
+
+        <circle class="pkt" r="6" fill="#c78bff" style="color:#c78bff;offset-path:path('M126,130 L146,130');--delay:.3s;--dur:1s"/>
+        <circle class="pkt" r="6" fill="#c78bff" style="color:#c78bff;offset-path:path('M266,130 L296,130');--delay:.9s;--dur:1s"/>
+        <circle class="pkt" r="6" fill="#ff5d8f" style="color:#ff5d8f;offset-path:path('M366,90 Q366,50 470,37');--delay:1.5s;--dur:1.2s"/>
+        <circle class="pkt" r="6" fill="#2fd6a0" style="color:#2fd6a0;offset-path:path('M555,64 L555,130');--delay:2.7s;--dur:1s"/>
+        <circle class="pkt" r="6" fill="#7c9cff" style="color:#7c9cff;offset-path:path('M436,130 L470,130');--delay:2.1s;--dur:.9s"/>
+        <circle class="pkt" r="6" fill="#2fd6a0" style="color:#2fd6a0;offset-path:path('M640,148 Q660,120 680,95');--delay:3.4s;--dur:1.1s"/>
+        <circle class="pkt" r="6" fill="#2fd6a0" style="color:#2fd6a0;offset-path:path('M640,172 Q660,180 680,175');--delay:3.6s;--dur:1s"/>
+        <circle class="pkt" r="6" fill="#7c9cff" style="color:#7c9cff;offset-path:path('M830,85 Q845,90 850,110');--delay:4.6s;--dur:.9s"/>
+        <circle class="pkt" r="6" fill="#ffb454" style="color:#ffb454;offset-path:path('M830,175 Q845,165 850,150');--delay:4.8s;--dur:.9s"/>
+        <circle class="pkt" r="6" fill="#7c9cff" style="color:#7c9cff;offset-path:path('M898,165 L890,192');--delay:5.6s;--dur:.7s"/>
+        <circle class="pkt" r="6" fill="#ff5d8f" style="color:#ff5d8f;offset-path:path('M832,230 L770,230');--delay:6.2s;--dur:.8s"/>
+        <circle class="pkt" r="6" fill="#ff5d8f" style="color:#ff5d8f;offset-path:path('M685,260 Q685,314 760,314');--delay:7.1s;--dur:1s"/>
+        <circle class="pkt" r="6" fill="#2fd6a0" style="color:#2fd6a0;offset-path:path('M890,268 L850,292');--delay:6.4s;--dur:.8s"/>
+      </svg>
+    </div>
+
+    <ul class="narr">
+      <li class="anim" style="--delay:.4s"><b>Two independent candidates:</b> dense cosine over the 5,844 vectors and BM25 over the same chunks. Their scores are fused by <b>rank</b> (RRF), so they never need to be on the same scale.</li>
+      <li class="anim" style="--delay:.8s"><b>Admission is OR:</b> a chunk enters if <span class="sql">sim ≥ 0.78</span> <i>or</i> its BM25 score is ≥ 60% of the best — this is what rescues exact legal nouns.</li>
+      <li class="anim" style="--delay:1.2s"><b>CRAG is conditional:</b> only when the best dense similarity is below 0.78 does the system fetch adala / ism / web in parallel (8s cap) and merge those sources.</li>
+    </ul>
+    <div class="verdict anim" style="--delay:1.6s"><b>Hybrid made retrieval right, not faster.</b> The latency win came from parallel CRAG + an 8s timeout + retries; a healthy local answer logs roughly <span class="sql">retrieve_ms≈412 · total_ms≈1583</span>.</div>
+  </section>
+
+  <!-- ================= 4 : GENERATION ================= -->
+  <section class="slide" data-dur="18000" style="--accent:#ff5d8f">
+    <div class="shead"><span class="num">4</span><h2>Generation &amp; persistence</h2>
+      <span class="tag">context + memory &rarr; answer &rarr; two rows</span></div>
+
+    <div class="stage">
+      <svg class="flow" viewBox="0 0 960 300" aria-label="Generation flow">
+        <g class="node anim" style="--delay:.1s">
+          <rect x="16" y="70" width="140" height="56" rx="12" style="stroke:#2fd6a0"/>
+          <text x="86" y="90">context</text>
+          <text x="86" y="110" class="small">top-k + CRAG sources</text>
+        </g>
+        <g class="node anim" style="--delay:.3s">
+          <rect x="190" y="60" width="180" height="76" rx="12" style="stroke:#7c9cff"/>
+          <text x="280" y="82">prompt builder</text>
+          <text x="280" y="102" class="small">question + context</text>
+          <text x="280" y="118" class="small">+ last 6 msgs</text>
+        </g>
+        <g class="node anim" style="--delay:.5s">
+          <rect x="400" y="60" width="170" height="76" rx="12" style="stroke:#ff5d8f"/>
+          <text x="485" y="82">Gemini</text>
+          <text x="485" y="103" class="small">generate_answer</text>
+          <text x="485" y="119" class="small">3 attempts · backoff</text>
+        </g>
+        <g class="node anim" style="--delay:.7s">
+          <rect x="600" y="70" width="150" height="56" rx="12" style="stroke:#7c9cff"/>
+          <text x="675" y="90">answer</text>
+          <text x="675" y="110" class="small">+ cited sources</text>
+        </g>
+        <g class="node anim" style="--delay:.9s">
+          <rect x="790" y="70" width="150" height="56" rx="12" style="stroke:#7c9cff"/>
+          <text x="865" y="90">response</text>
+          <text x="865" y="110" class="small">JSON to the UI</text>
+        </g>
+        <g class="node anim" style="--delay:1.1s">
+          <rect x="400" y="182" width="170" height="56" rx="12" style="stroke:#ff5d8f"/>
+          <text x="485" y="202">generate_suggestions</text>
+          <text x="485" y="220" class="small">Gemini · 3 chips</text>
+        </g>
+        <g class="node anim" style="--delay:1.3s">
+          <rect x="600" y="182" width="160" height="56" rx="12" style="stroke:#ffb454"/>
+          <text x="680" y="202">add_message ×2</text>
+          <text x="680" y="220" class="small">user + assistant</text>
+        </g>
+        <g class="node anim" style="--delay:1.5s">
+          <rect x="800" y="182" width="140" height="56" rx="12" style="stroke:#ffb454"/>
+          <text x="870" y="202">messages</text>
+          <text x="870" y="220" class="small">PostgreSQL</text>
+        </g>
+
+        <path class="wire g" d="M156,98 L190,98"/>
+        <path class="wire g" d="M370,98 L400,98"/>
+        <path class="wire g" d="M570,98 L600,98"/>
+        <path class="wire g" d="M750,98 L790,98"/>
+        <path class="wire r dash" d="M485,136 L485,182"/>
+        <path class="wire r dash" d="M570,200 Q700,190 790,112"/>
+        <path class="wire" d="M865,126 Q865,160 760,182"/>
+        <path class="wire" d="M760,210 L800,210"/>
+
+        <text class="lbl" x="173" y="88">build</text>
+        <text class="lbl" x="385" y="88">ask</text>
+        <text class="lbl" x="585" y="88">text</text>
+        <text class="lbl" x="770" y="88">attach</text>
+        <text class="lbl r" x="510" y="160">chips</text>
+        <text class="lbl" x="690" y="170">persist</text>
+        <text class="lbl" x="780" y="200">2 rows</text>
+
+        <circle class="pkt" r="6" fill="#2fd6a0" style="color:#2fd6a0;offset-path:path('M156,98 L190,98');--delay:.5s;--dur:1s"/>
+        <circle class="pkt" r="6" fill="#2fd6a0" style="color:#2fd6a0;offset-path:path('M370,98 L400,98');--delay:1.6s;--dur:1s"/>
+        <circle class="pkt" r="6" fill="#2fd6a0" style="color:#2fd6a0;offset-path:path('M570,98 L600,98');--delay:3.4s;--dur:1s"/>
+        <circle class="pkt" r="6" fill="#2fd6a0" style="color:#2fd6a0;offset-path:path('M750,98 L790,98');--delay:4.6s;--dur:1s"/>
+        <circle class="pkt" r="6" fill="#ff5d8f" style="color:#ff5d8f;offset-path:path('M485,136 L485,182');--delay:3.9s;--dur:.9s"/>
+        <circle class="pkt" r="6" fill="#ff5d8f" style="color:#ff5d8f;offset-path:path('M570,200 Q700,190 790,112');--delay:5.4s;--dur:1.6s"/>
+        <circle class="pkt" r="6" fill="#ffb454" style="color:#ffb454;offset-path:path('M865,126 Q865,160 760,182');--delay:6.2s;--dur:1.2s"/>
+        <circle class="pkt" r="6" fill="#ffb454" style="color:#ffb454;offset-path:path('M760,210 L800,210');--delay:7.2s;--dur:.8s"/>
+      </svg>
+    </div>
+
+    <ul class="narr">
+      <li class="anim" style="--delay:.4s"><b>Three Gemini calls per turn:</b> optional rephrase, the answer, then the follow-up suggestions. Retries use 3 attempts with exponential backoff and up to 3 fallback models.</li>
+      <li class="anim" style="--delay:.8s"><b>Memory is prompt stuffing:</b> the last 6 messages (3 turns) are truncated to 600 chars each and wrapped in <span class="sql">&lt;turn&gt;</span> tags — labelled as context, not instructions.</li>
+      <li class="anim" style="--delay:1.2s"><b>Persistence is minimal:</b> only <span class="sql">role</span> + <span class="sql">content</span> are saved. Sources live in the response, so reopening a conversation shows the answers but not the citations.</li>
+    </ul>
+    <div class="verdict anim" style="--delay:1.6s"><b>No answer cache yet.</b> Every turn pays the Gemini latency; caching is the next cheap win, not a bigger model.</div>
+  </section>
+
+  <!-- ================= 5 : MEMORY ================= -->
+  <section class="slide" data-dur="18000" style="--accent:#ffb454">
+    <div class="shead"><span class="num">5</span><h2>Conversation memory</h2>
+      <span class="tag">server-side · sliding window · 3 turns</span></div>
+
+    <div class="stage">
+      <svg class="flow" viewBox="0 0 960 260" aria-label="Memory flow">
+        <g class="node anim" style="--delay:.1s">
+          <rect x="16" y="90" width="150" height="60" rx="12" style="stroke:#c78bff"/>
+          <text x="91" y="112">localStorage</text>
+          <text x="91" y="132" class="small">active conversation id</text>
+        </g>
+        <g class="node anim" style="--delay:.3s">
+          <rect x="196" y="80" width="150" height="70" rx="12" style="stroke:#c78bff"/>
+          <text x="271" y="104">Browser</text>
+          <text x="271" y="124" class="small">app.js</text>
+        </g>
+        <g class="node anim" style="--delay:.5s">
+          <rect x="376" y="80" width="150" height="70" rx="12" style="stroke:#2fd6a0"/>
+          <text x="451" y="104">FastAPI</text>
+          <text x="451" y="124" class="small">/ask + /conversations</text>
+        </g>
+        <g class="node anim" style="--delay:.7s">
+          <rect x="560" y="20" width="170" height="54" rx="12" style="stroke:#7c9cff"/>
+          <text x="645" y="38">conversations</text>
+          <text x="645" y="56" class="small">title · created_at</text>
+        </g>
+        <g class="node anim" style="--delay:.9s">
+          <rect x="560" y="150" width="170" height="54" rx="12" style="stroke:#7c9cff"/>
+          <text x="645" y="168">messages</text>
+          <text x="645" y="186" class="small">role · content · created_at</text>
+        </g>
+        <g class="node anim" style="--delay:1.1s">
+          <rect x="770" y="70" width="170" height="70" rx="12" style="stroke:#ffb454"/>
+          <text x="855" y="92">history block</text>
+          <text x="855" y="112" class="small">last 12 loaded</text>
+          <text x="855" y="128" class="small">last 6 injected</text>
+        </g>
+
+        <path class="wire p" d="M166,120 L196,120"/>
+        <path class="wire p" d="M346,115 L376,115"/>
+        <path class="wire" d="M451,80 Q451,47 560,47"/>
+        <path class="wire" d="M451,150 Q451,177 560,177"/>
+        <path class="wire" d="M730,170 Q780,150 770,122"/>
+        <path class="wire dash soft" d="M855,140 L855,150"/>
+
+        <text class="lbl" x="181" y="110">id</text>
+        <text class="lbl" x="361" y="105">HTTP</text>
+        <text class="lbl" x="505" y="38">create / list</text>
+        <text class="lbl" x="505" y="200">load / save</text>
+        <text class="lbl" x="760" y="145">trim</text>
+
+        <circle class="pkt" r="6" fill="#c78bff" style="color:#c78bff;offset-path:path('M166,120 L196,120');--delay:.4s;--dur:1s"/>
+        <circle class="pkt" r="6" fill="#c78bff" style="color:#c78bff;offset-path:path('M346,115 L376,115');--delay:1.2s;--dur:1s"/>
+        <circle class="pkt" r="6" fill="#7c9cff" style="color:#7c9cff;offset-path:path('M451,80 Q451,47 560,47');--delay:2s;--dur:1.3s"/>
+        <circle class="pkt" r="6" fill="#7c9cff" style="color:#7c9cff;offset-path:path('M451,150 Q451,177 560,177');--delay:3.2s;--dur:1.3s"/>
+        <circle class="pkt" r="6" fill="#ffb454" style="color:#ffb454;offset-path:path('M730,170 Q780,150 770,122');--delay:4.6s;--dur:1.2s"/>
+        <circle class="pkt" r="6" fill="#ffb454" style="color:#ffb454;offset-path:path('M855,140 L855,150');--delay:6s;--dur:.5s"/>
+      </svg>
+    </div>
+
+    <ul class="narr">
+      <li class="anim" style="--delay:.4s"><b>The browser stores one string</b> — the active conversation id. The transcript itself lives in PostgreSQL, so a reload or a new device can restore it.</li>
+      <li class="anim" style="--delay:.8s"><b>Sliding window:</b> <span class="sql">get_messages(limit=12)</span> loads the window, then <span class="sql">_history_block</span> keeps the last 6 messages, 600 chars each.</li>
+      <li class="anim" style="--delay:1.2s"><b>Memory does not touch retrieval:</b> the rephrase and retrieval steps never see the history; only the generation prompt does. Follow-ups rely on the previous answer being in that prompt.</li>
+    </ul>
+    <div class="verdict anim" style="--delay:1.6s"><b>Known bug:</b> the slice uses <span class="sql">history[-memory_turns:]</span> instead of <span class="sql">[-memory_turns*2:]</span>, so the effective window is 3 turns, not 6.</div>
+  </section>
+
+</main>
+
+<div class="controls">
+  <button id="prev" title="Previous (←)">⏮ Prev</button>
+  <button id="play" class="primary">▶ Play</button>
+  <button id="next" title="Next (→)">Next ⏭</button>
+  <button id="replay">↺ Replay slide</button>
+  <label class="auto"><input type="checkbox" id="auto" checked> Autoplay</label>
+  <div class="dots" id="dots"></div>
+  <span class="kbd">space = play/pause · ← → = slides</span>
+</div>
+
+<script>
+(function(){
+  const slides=[...document.querySelectorAll('.slide')];
+  const dots=document.getElementById('dots');
+  const btnPlay=document.getElementById('play');
+  const btnPrev=document.getElementById('prev');
+  const btnNext=document.getElementById('next');
+  const btnReplay=document.getElementById('replay');
+  const chkAuto=document.getElementById('auto');
+  const progress=document.querySelector('.progress i');
+
+  let idx=0, playing=false, timer=null, t0=0, dur=0, remain=0;
+
+  slides.forEach((s,i)=>{
+    const b=document.createElement('button');
+    b.title='Slide '+(i+1);
+    b.onclick=()=>show(i);
+    dots.appendChild(b);
+  });
+
+  function restart(el){
+    el.style.animation='none';
+    el.getBoundingClientRect();
+    el.style.animation='';
+  }
+
+  function arm(ms){
+    clearTimeout(timer);
+    t0=Date.now();
+    timer=setTimeout(done,ms);
+  }
+
+  function show(i){
+    idx=(i+slides.length)%slides.length;
+    slides.forEach((s,k)=>s.classList.toggle('active',k===idx));
+    const s=slides[idx];
+    dur=+s.dataset.dur;
+    remain=dur;
+    document.documentElement.style.setProperty('--pd',(dur/1000)+'s');
+    s.querySelectorAll('.anim, .pkt').forEach(restart);
+    restart(progress);
+    [...dots.children].forEach((d,k)=>d.classList.toggle('on',k===idx));
+    try {
+      history.replaceState(null, '', '#' + (idx + 1));
+    } catch (e) {
+      location.hash = String(idx + 1);
+    }
+    if(playing) arm(dur);
+  }
+
+  function done(){
+    if(chkAuto.checked){ show(idx+1); }
+    else { remain=0; setPaused(true); }
+  }
+
+  function setPaused(p){
+    playing=!p;
+    document.body.classList.toggle('paused',p);
+    btnPlay.textContent=p?'▶ Play':'❚❚ Pause';
+    clearTimeout(timer);
+    if(!p){ arm(remain>0?remain:dur); }
+    else if(dur>0){ remain=Math.max(0,dur-(Date.now()-t0)); }
+  }
+
+  btnPlay.onclick=()=>setPaused(!playing);
+  btnPrev.onclick=()=>show(idx-1);
+  btnNext.onclick=()=>show(idx+1);
+  btnReplay.onclick=()=>show(idx);
+  chkAuto.onchange=()=>{ if(chkAuto.checked&&playing) arm(remain>0?remain:dur); };
+
+  document.addEventListener('keydown',e=>{
+    if(e.key===' '){e.preventDefault();setPaused(!playing);}
+    if(e.key==='ArrowRight')show(idx+1);
+    if(e.key==='ArrowLeft')show(idx-1);
+  });
+
+  const h = parseInt((location.hash || '').replace('#', ''), 10);
+  show(Number.isFinite(h) && h >= 1 && h <= slides.length ? h - 1 : 0);
+  setPaused(false);
+})();
+</script>
+</body>
+</html>

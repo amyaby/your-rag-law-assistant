@@ -66,17 +66,17 @@ th{background:#242450;color:#ffd0d0}
 </div>
 <div class="mermaid">
 flowchart LR
-  P[PDF / TXT corpus<br/>9 laws] --> ING[INGESTION<br/>chunk + embed]
-  ING --> DB[(PostgreSQL<br/>pgvector HNSW<br/>5844 chunks)]
-  Q[User question] --> RP[Rephrase<br/>Gemini]
-  RP --> HY[Hybrid search<br/>dense + BM25 + RRF]
+  P["PDF / TXT corpus<br/>9 laws"] --> ING["INGESTION<br/>chunk + embed"]
+  ING --> DB[("PostgreSQL<br/>pgvector HNSW<br/>5844 chunks")]
+  Q["User question"] --> RP["Rephrase<br/>Gemini"]
+  RP --> HY["Hybrid search<br/>dense + BM25 + RRF"]
   DB --> HY
-  HY --> GATE{best dense<br/>similarity &lt; 0.78?}
-  GATE -- no, strong --> CTX[Context top-k]
-  GATE -- yes, weak --> CRAG[CRAG<br/>adala/ism/web]
+  HY --> GATE{"best dense<br/>similarity under 0.78?"}
+  GATE -- no, strong --> CTX["Context top-k"]
+  GATE -- yes, weak --> CRAG["CRAG<br/>adala/ism/web"]
   CRAG --> CTX
-  CTX --> GEN[Generate answer<br/>Gemini + grounding]
-  GEN --> UI[Chat UI<br/>answer + sources]
+  CTX --> GEN["Generate answer<br/>Gemini + grounding"]
+  GEN --> UI["Chat UI<br/>answer + sources"]
 </div>
 <div class="note"><b>The one-sentence story:</b> documents are chunked on legal-article boundaries and embedded once; each question is embedded and matched with two complementary retrievers (meaning + exact words), fused by rank, and only if the semantic match is weak do we go out to the web. The answer is generated strictly from the retrieved context with law-qualified citations.</div>
 </div>
@@ -124,20 +124,20 @@ flowchart TD
 <h2>2 &middot; Query &mdash; Rephrase &rarr; Hybrid (Dense + BM25) &rarr; Rank Fusion</h2>
 <div class="mermaid">
 flowchart TD
-  U["User question"] --> JS["app.js &rarr; POST /ask<br/>{question, conversation_id}"]
+  U["User question"] --> JS["app.js -> POST /ask<br/>{question, conversation_id}"]
   JS --> RP["llm.rephrase_query<br/>Gemini #1 (cached)"]
-  JS --> MEM["vector_store.get_messages<br/>memory_turns=6 &rarr; up to 12 msgs"]
+  JS --> MEM["vector_store.get_messages<br/>memory_turns=6 -> up to 12 msgs"]
   RP --> RET["retriever.retrieve()"]
   RET --> HY["hybrid.hybrid_search()"]
-  HY --> DC["dense_candidates<br/>embed_query 'query:'<br/>pgvector &lt;=&gt; operator<br/>1 - distance = cosine<br/>LIMIT 40"]
+  HY --> DC["dense_candidates<br/>embed_query 'query:'<br/>pgvector <=> operator<br/>1 - distance = cosine<br/>LIMIT 40"]
   HY --> BM["BM25.scores<br/>k1=1.5, b=0.75<br/>IDF=ln(1+(N-df+0.5)/(df+0.5))"]
   DC --> DR["dense ranks 1..40"]
   BM --> BR["BM25 ranks 1..40"]
   DR --> RRF["RRF fusion<br/>sum of 1/(60 + rank)<br/>w_dense=1.0, w_bm25=0.35"]
   BR --> RRF
-  RRF --> ADM["OR-admission<br/>sim &ge; 0.78 OR bm25 &ge; 0.6*best_bm25"]
+  RRF --> ADM["OR-admission<br/>sim >= 0.78 OR bm25 >= 0.6*best_bm25"]
   ADM --> SRT["sort by RRF desc"]
-  SRT --> CK{"best dense similarity<br/>&lt; 0.78 ?"}
+  SRT --> CK{"best dense similarity<br/>under 0.78 ?"}
   CK -- "no (confident)" --> CTX["build context<br/>top 10 chunks"]
   CK -- "yes (weak)" --> CRG["corrective_search()"]
   CRG --> CTX
@@ -161,15 +161,15 @@ flowchart TD
 <h2>3 &middot; Corrective RAG &mdash; fallback only when retrieval is weak</h2>
 <div class="mermaid">
 flowchart TD
-  CK{"corrective gate:<br/>best dense similarity &lt; 0.78"} -- yes --> CR["corrective_search()"]
-  CR --> TRY["try scrapers in order:<br/>adala &rarr; ism &rarr; web"]
+  CK{"corrective gate:<br/>best dense similarity under 0.78"} -- yes --> CR["corrective_search()"]
+  CR --> TRY["try scrapers in order:<br/>adala -> ism -> web"]
   TRY --> A["scraper.scrape_adala_text<br/>__NEXT_DATA__ parse<br/>+ robots check"]
   TRY --> I["ism_scraper.scrape_ism_text<br/>list PDFs, topic-map fallback<br/>article_bonus for ordering"]
   TRY --> W["web_search<br/>.ma allowlist<br/>+ legal-marker filter"]
-  A --> F["_filter_relevant<br/>relevance &ge; 0.25"]
+  A --> F["_filter_relevant<br/>relevance >= 0.25"]
   I --> F
   W --> F
-  F --> KEEP{"kept &ge; 1 ?"}
+  F --> KEEP{"kept >= 1 ?"}
   KEEP -- yes --> OUT["return set<br/>cap crag_max_chunks=3"]
   KEEP -- no --> TRY
 </div>
@@ -184,7 +184,7 @@ flowchart TD
 <h2>4 &middot; Generation &mdash; grounded answer + follow-ups</h2>
 <div class="mermaid">
 flowchart TD
-  CTX["Context: top 10 chunks<br/>format: [law &mdash; المادة N]<br/>content"] --> GA["llm.generate_answer<br/>Gemini #2"]
+  CTX["Context: top 10 chunks<br/>format: law + number<br/>(per source chunk)"] --> GA["llm.generate_answer<br/>Gemini #2"]
   GA --> RULES["Grounding rules in system prompt:<br/>1) answer ONLY from context<br/>2) SUBJECT-MATCH GATE (domain vs subject)<br/>3) ARTICLE IDENTITY (name law + number)<br/>4) cross-domain: never mix laws"]
   RULES --> ANS["Draft answer<br/>law-qualified citations"]
   ANS --> SUG["suggested_questions<br/>Gemini #3"]
@@ -255,19 +255,19 @@ flowchart LR
 <h2>Suggested reading order of the code</h2>
 <div class="mermaid">
 flowchart LR
-  A[config.py] --> B[retrieval/vector_store.py]
-  B --> C[retrieval/embed.py]
-  C --> D[retrieval/tokenize.py]
-  D --> E[ingestion/chunker.py]
-  E --> F[retrieval/search.py]
-  F --> G[retrieval/relevance.py]
-  G --> H[retrieval/hybrid.py]
-  H --> I[retrieval/retriever.py]
-  I --> J[retrieval/robots.py]
-  J --> K[scrapers + corrective.py]
-  K --> L[core/llm.py]
-  L --> M[main.py]
-  M --> N[static/ frontend]
+  A["config.py"] --> B["retrieval/vector_store.py"]
+  B --> C["retrieval/embed.py"]
+  C --> D["retrieval/tokenize.py"]
+  D --> E["ingestion/chunker.py"]
+  E --> F["retrieval/search.py"]
+  F --> G["retrieval/relevance.py"]
+  G --> H["retrieval/hybrid.py"]
+  H --> I["retrieval/retriever.py"]
+  I --> J["retrieval/robots.py"]
+  J --> K["scrapers + corrective.py"]
+  K --> L["core/llm.py"]
+  L --> M["main.py"]
+  M --> N["static/ frontend"]
 </div>
 </div>
 

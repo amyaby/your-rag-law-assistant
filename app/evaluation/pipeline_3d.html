@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Moroccan Legal RAG — 3D Pipeline Visualization</title>
+<style>
+  :root{
+    --bg:#070a16; --panel:#0d1226; --panel2:#0a0f20; --border:#222d55;
+    --text:#e8edff; --muted:#8b97c2;
+    --c-doc:#ffb454; --c-chunk:#7faeff; --c-embed:#2fd6a0; --c-db:#3fb984;
+    --c-dense:#4d9bff; --c-bm25:#ff8fa3; --c-rrf:#c78bff; --c-crag:#ff5d8f;
+    --c-gen:#9faeff; --c-user:#e0b3ff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:radial-gradient(1200px 700px at 20% -10%,#141b3e 0%,transparent 60%),
+       radial-gradient(900px 600px at 110% 20%,#241540 0%,transparent 55%),var(--bg);
+       color:var(--text);font-family:ui-sans-serif,system-ui,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+
+  #scene{position:fixed;inset:0}
+  canvas{display:block}
+
+  /* HUD */
+  .hud{position:fixed;top:16px;left:16px;z-index:20;max-width:330px}
+  .hud h1{font-size:17px;letter-spacing:-.3px;line-height:1.25}
+  .hud h1 span{color:var(--c-embed)}
+  .hud p{color:var(--muted);font-size:12px;margin-top:5px;line-height:1.5}
+
+  .stages{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:20;display:flex;gap:6px;flex-wrap:wrap;justify-content:center;max-width:60vw}
+  .stages button{font:inherit;font-size:11.5px;font-weight:600;color:var(--muted);background:#111a38;
+    border:1px solid #26315f;border-radius:9px;padding:6px 10px;cursor:pointer;transition:.15s;white-space:nowrap}
+  .stages button:hover{color:var(--text);border-color:#3a4a86}
+  .stages button.on{color:#06122a;background:linear-gradient(90deg,#5b6cf5,#a45bff);border-color:transparent}
+
+  .caption{position:fixed;bottom:74px;left:50%;transform:translateX(-50%);z-index:20;
+    background:rgba(10,15,32,.9);border:1px solid #26315f;border-radius:12px;padding:10px 16px;
+    max-width:min(760px,88vw);text-align:center;font-size:13px;line-height:1.5;backdrop-filter:blur(10px);
+    transition:opacity .3s}
+  .caption b{color:var(--c-embed)}
+  .caption .k{font-family:ui-monospace,Menlo,Consolas,monospace;background:#1b2450;color:#ffd28a;padding:1px 6px;border-radius:5px;font-size:12px}
+
+  .controls{position:fixed;bottom:0;left:0;right:0;z-index:30;display:flex;gap:10px;align-items:center;
+    justify-content:center;flex-wrap:wrap;padding:12px 16px;background:rgba(7,10,22,.92);
+    border-top:1px solid #1c2750;backdrop-filter:blur(10px)}
+  button.ctl{font:inherit;font-size:13.5px;font-weight:600;color:var(--text);background:#141e44;
+    border:1px solid #2f3f7c;border-radius:10px;padding:8px 15px;cursor:pointer;transition:.15s}
+  button.ctl:hover{background:#1e2a5e;transform:translateY(-1px)}
+  button.ctl.primary{background:linear-gradient(90deg,#5b6cf5,#a45bff);border-color:transparent;min-width:110px}
+  .dots{display:flex;gap:7px}
+  .dots button{width:11px;height:11px;padding:0;border-radius:50%;background:#26315f;border:none;cursor:pointer;transition:.2s}
+  .dots button.on{background:linear-gradient(90deg,var(--c-user),var(--c-gen));transform:scale(1.35)}
+  .kbd{font-size:11px;color:#66739f}
+  @media(max-width:720px){.hud{max-width:200px}.stages{max-width:90vw;top:auto;bottom:118px}.caption{bottom:150px}}
+
+  .legend{position:fixed;top:16px;right:16px;z-index:20;background:rgba(13,18,38,.85);
+    border:1px solid #26315f;border-radius:12px;padding:12px 14px;font-size:11.5px;backdrop-filter:blur(10px)}
+  .legend div{display:flex;align-items:center;gap:7px;margin:4px 0;color:var(--muted)}
+  .legend i{width:10px;height:10px;border-radius:50%;display:inline-block;flex:none}
+</style>
+</head>
+<body>
+<div id="scene"></div>
+
+<div class="hud">
+  <h1>Moroccan Legal RAG — <span>3D Pipeline</span></h1>
+  <p>Ingest → Chunk → Embed → pgvector → Hybrid (Dense+BM25) → RRF → CRAG → Gemini.<br>
+  Drag to orbit · scroll to zoom. Real values from the codebase.</p>
+</div>
+
+<div class="legend">
+  <div><i style="background:var(--c-doc)"></i>Documents / corpus</div>
+  <div><i style="background:var(--c-chunk)"></i>Chunks (text units)</div>
+  <div><i style="background:var(--c-embed)"></i>Embeddings (384-d)</div>
+  <div><i style="background:var(--c-dense)"></i>Dense (cosine)</div>
+  <div><i style="background:var(--c-bm25)"></i>BM25 (lexical)</div>
+  <div><i style="background:var(--c-user)"></i>User query</div>
+  <div><i style="background:var(--c-gen)"></i>Gemini / answer</div>
+</div>
+
+<div class="stages" id="stages"></div>
+<div class="caption" id="caption">Loading 3D scene…</div>
+
+<div class="controls">
+  <button class="ctl" id="prev">⏮ Prev</button>
+  <button class="ctl primary" id="play">▶ Play</button>
+  <button class="ctl" id="next">Next ⏭</button>
+  <button class="ctl" id="replay">↺ Replay scene</button>
+  <label class="ctl" style="display:flex;gap:6px;align-items:center;font-size:13px;cursor:pointer">
+    <input type="checkbox" id="auto" checked> Autoplay</label>
+  <div class="dots" id="dots"></div>
+  <span class="kbd">Space = play/pause · ← → = scenes · R = replay</span>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+}}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+/* ------------------------------------------------------------------ *
+ *  SCENE SETUP
+ * ------------------------------------------------------------------ */
+const host = document.getElementById('scene');
+const renderer = new THREE.WebGLRenderer({antialias:true, alpha:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth, innerHeight);
+host.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x070a16, 0.0075);
+
+const camera = new THREE.PerspectiveCamera(52, innerWidth/innerHeight, 0.1, 2000);
+camera.position.set(0, 8, 62);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.minDistance = 18;
+controls.maxDistance = 180;
+controls.autoRotate = false;
+
+scene.add(new THREE.AmbientLight(0x8090c0, 0.9));
+const key = new THREE.DirectionalLight(0xffffff, 1.4); key.position.set(20,40,30); scene.add(key);
+const rim = new THREE.PointLight(0x7c9cff, 1.6, 400); rim.position.set(-40,20,-30); scene.add(rim);
+const warm= new THREE.PointLight(0xffb454, 1.0, 400); warm.position.set(50,-10,20); scene.add(warm);
+
+// subtle grid
+const grid = new THREE.GridHelper(220, 44, 0x1c2a58, 0x121a38);
+grid.position.y = -22; grid.material.opacity = 0.5; grid.material.transparent = true;
+scene.add(grid);
+
+/* ------------------------------------------------------------------ *
+ *  HELPERS
+ * ------------------------------------------------------------------ */
+const TMP = new THREE.Vector3();
+function makeLabel(text, color='#e8edff', size=34, weight='700'){
+  const pad=18, c=document.createElement('canvas'), ctx=c.getContext('2d');
+  const font = `${weight} ${size}px ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif`;
+  ctx.font = font;
+  const w = ctx.measureText(text).width;
+  c.width = Math.ceil(w + pad*2); c.height = size + pad*2;
+  const g = c.getContext('2d');
+  g.font = font; g.textBaseline='middle'; g.textAlign='center';
+  g.fillStyle = color;
+  g.shadowColor = 'rgba(0,0,0,.85)'; g.shadowBlur = 8;
+  g.fillText(text, c.width/2, c.height/2);
+  const tex = new THREE.CanvasTexture(c);
+  tex.anisotropy = 4;
+  const spr = new THREE.Sprite(new THREE.SpriteMaterial({map:tex, transparent:true, depthTest:false}));
+  const s = 0.022;
+  spr.scale.set(c.width*s, c.height*s, 1);
+  return spr;
+}
+
+function glow(color, size, opacity=0.5){
+  const mat = new THREE.SpriteMaterial({
+    map: radialTex(color), color, transparent:true, opacity,
+    blending:THREE.AdditiveBlending, depthWrite:false
+  });
+  const s = new THREE.Sprite(mat); s.scale.set(size,size,1); return s;
+}
+const _radialCache = {};
+function radialTex(color){
+  if(typeof color === 'number') color = '#' + color.toString(16).padStart(6,'0');
+  if(_radialCache[color]) return _radialCache[color];
+  const c=document.createElement('canvas'); c.width=c.height=128;
+  const x=c.getContext('2d');
+  const gr=x.createRadialGradient(64,64,0,64,64,64);
+  gr.addColorStop(0,'rgba(255,255,255,1)');
+  gr.addColorStop(0.25,color);
+  gr.addColorStop(1,'rgba(0,0,0,0)');
+  x.fillStyle=gr; x.fillRect(0,0,128,128);
+  const t=new THREE.CanvasTexture(c); _radialCache[color]=t; return t;
+}
+
+// flowing particle along a path
+class Flow {
+  constructor(curve, color, count=14, speed=0.12, size=0.9, delay=0, visible=true){
+    this.color=color; this.speed=speed; this.delay=delay;
+    const geo = new THREE.BufferGeometry();
+    const pos = new Float32Array(count*3);
+    geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
+    this.points = new THREE.Points(geo, new THREE.PointsMaterial({
+      color, size, map:radialTex(color), transparent:true, opacity:0.95,
+      blending:THREE.AdditiveBlending, depthWrite:false, sizeAttenuation:true
+    }));
+    this.curve = curve; this.count=count; this.t0=0;
+    this.points.visible = visible;
+    scene.add(this.points);
+  }
+  update(t){
+    const p = ((t*this.speed + this.delay) % 1);
+    const arr = this.points.geometry.attributes.position.array;
+    for(let i=0;i<this.count;i++){
+      const d = (p + i/this.count) % 1;
+      this.curve.getPointAt(d, TMP);
+      arr[i*3]=TMP.x; arr[i*3+1]=TMP.y; arr[i*3+2]=TMP.z;
+    }
+    this.points.geometry.attributes.position.needsUpdate = true;
+    // fade in over life
+    this.points.material.opacity = 0.35 + 0.6*Math.sin(p*Math.PI);
+  }
+  set visible(v){ this.points.visible=v; }
+  get visible(){ return this.points.visible; }
+}
+
+function tube(curve, color, radius=0.10, opacity=0.28){
+  const geo = new THREE.TubeGeometry(curve, 90, radius, 6, false);
+  const mat = new THREE.MeshBasicMaterial({color, transparent:true, opacity, blending:THREE.AdditiveBlending});
+  const m = new THREE.Mesh(geo, mat); scene.add(m); return m;
+}
+
+function curveFrom(pts){
+  return new THREE.CatmullRomCurve3(pts.map(p=>new THREE.Vector3(p[0],p[1],p[2])));
+}
+
+function easeInOut(t){ return t<0.5 ? 2*t*t : 1-Math.pow(-2*t+2,2)/2; }
+function smooth(t){ return t*t*(3-2*t); }
+
+/* ------------------------------------------------------------------ *
+ *  REAL SAMPLE DATA (from the corpus / test_questions.py)
+ * ------------------------------------------------------------------ */
+const LAWS = [
+  {name:'admin',   label:'ق. الإداري',  n:1581, color:'#4d9bff'},
+  {name:'oblig',   label:'الالتزامات', n:1303, color:'#5fb0ff'},
+  {name:'procpen', label:'المسطرة الجنائية', n:852, color:'#7c9cff'},
+  {name:'penal',   label:'القانون الجنائي', n:758, color:'#ff8fa3'},
+  {name:'labour',  label:'مدونة الشغل', n:590, color:'#2fd6a0'},
+  {name:'famille', label:'مدونة الأسرة', n:399, color:'#ffb454'},
+  {name:'conso',   label:'الاستهلاك', n:205, color:'#c78bff'},
+  {name:'presse',  label:'الصحافة', n:121, color:'#ff5d8f'},
+  {name:'data',    label:'حماية البيانات', n:55, color:'#9faeff'},
+];
+const TOTAL = 5864;
+
+const REAL_QUESTION = 'ما هي عقوبة السرقة في المادة 505؟';
+
+const REAL_CHUNK = "المادة4 — الزواج ميثاق تراض وترابط شرعي بين رجل وامرأة على وجه الدوام، غايته الإحصان والعفاف وإنشاء أسرة مستقرة، برعاية الزوجين طبقا لأحكام هذه المدونة";
+
+const REAL_ANSWER = "عقوبة السرقة (القانون الجنائي):\n• الفصل 505 — الحبس من سنة إلى 5 سنوات\n• الفصل 508 — حبس من 20 إلى 30 يوما\n• الفصل 517 — غرامة من 1200 إلى 5000 درهم";
+
+/* ------------------------------------------------------------------ *
+ *  LAYOUT (world coords)
+ * ------------------------------------------------------------------ */
+const Z = { docs:-46, chunk:-30, embed:-12, db:6, topk:26, gen:46 };
+
+// documents
+const docGroup = new THREE.Group(); scene.add(docGroup);
+const docs = [];
+LAWS.forEach((L,i)=>{
+  const y = (i - (LAWS.length-1)/2) * 4.4;
+  const geo = new THREE.BoxGeometry(7, 3.4, 0.9);
+  const mat = new THREE.MeshStandardMaterial({color:L.color, emissive:L.color, emissiveIntensity:0.25,
+    metalness:0.4, roughness:0.4, transparent:true, opacity:0.9});
+  const box = new THREE.Mesh(geo, mat);
+  box.position.set(-62 + (i%2)*3, y, Z.docs);
+  const lbl = makeLabel(L.label, L.color, 30);
+  lbl.position.set(box.position.x, y, Z.docs+2.2);
+  const cnt = makeLabel(`${L.n}`, '#93a0c8', 24, '600');
+  cnt.position.set(box.position.x, y-2.6, Z.docs+2.2);
+  scene.add(box, lbl, cnt);
+  docs.push({mesh:box, ...L, base:box.position.clone()});
+});
+
+/* ------------------------------------------------------------------ *
+ *  SCENES
+ * ------------------------------------------------------------------ */
+const scenes = [];
+let current = 0;
+
+function sceneObj(o){ scenes.push(o); return o; }
+
+/* --- create reusable objects -------------------------------------- */
+// chunk particles
+const CHUNK_N = 220;
+const chunkGeo = new THREE.BufferGeometry();
+const chunkPos = new Float32Array(CHUNK_N*3);
+chunkGeo.setAttribute('position', new THREE.BufferAttribute(chunkPos,3));
+const chunkPts = new THREE.Points(chunkGeo, new THREE.PointsMaterial({
+  color:0x7faeff, size:1.1, map:radialTex('#7faeff'), transparent:true, opacity:0.0,
+  blending:THREE.AdditiveBlending, depthWrite:false
+}));
+scene.add(chunkPts);
+const chunkTargets = [];
+for(let i=0;i<CHUNK_N;i++){
+  const L = LAWS[i % LAWS.length];
+  const rowY = ((i % LAWS.length) - (LAWS.length-1)/2) * 4.4;
+  chunkTargets.push({x: -76 + Math.random()*22, y: rowY + (Math.random()-0.5)*3, z: Z.chunk + (Math.random()-0.5)*6, law:i%LAWS.length});
+}
+const chunkStart = chunkTargets.map(t=>({x:t.x-30,y:t.y,z:t.z}));
+
+// embedding cloud (3D sphere-ish clusters)
+const EMB_N = 520;
+const embGeo = new THREE.BufferGeometry();
+const embPos = new Float32Array(EMB_N*3);
+const embCol = new Float32Array(EMB_N*3);
+embGeo.setAttribute('position', new THREE.BufferAttribute(embPos,3));
+embGeo.setAttribute('color', new THREE.BufferAttribute(embCol,3));
+const embPts = new THREE.Points(embGeo, new THREE.PointsMaterial({
+  size:1.0, vertexColors:true, map:radialTex('#ffffff'), transparent:true, opacity:0.0,
+  blending:THREE.AdditiveBlending, depthWrite:false
+}));
+scene.add(embPts);
+const embTargets = [];
+const clusterCenters = LAWS.map((L,i)=>{
+  const ang = (i/LAWS.length)*Math.PI*2;
+  const r = 10;
+  return new THREE.Vector3(Math.cos(ang)*r + 6, (i-(LAWS.length-1)/2)*2.6, Z.embed + Math.sin(ang)*5);
+});
+const cc = new THREE.Color();
+for(let i=0;i<EMB_N;i++){
+  const li = i % LAWS.length;
+  const C = clusterCenters[li];
+  const p = new THREE.Vector3(
+    C.x + (Math.random()-0.5)*7,
+    C.y + (Math.random()-0.5)*7,
+    C.z + (Math.random()-0.5)*7
+  );
+  embTargets.push(p);
+  cc.set(LAWS[li].color); const f = 0.5+Math.random()*0.5;
+  embCol[i*3]=cc.r*f; embCol[i*3+1]=cc.g*f; embCol[i*3+2]=cc.b*f;
+}
+embGeo.attributes.color.needsUpdate = true;
+
+// DB cylinder
+const dbGroup = new THREE.Group(); scene.add(dbGroup);
+const dbCyl = new THREE.Mesh(
+  new THREE.CylinderGeometry(9, 9, 18, 48, 1, false),
+  new THREE.MeshStandardMaterial({color:0x123a2c, emissive:0x2fd6a0, emissiveIntensity:0.15,
+    metalness:0.5, roughness:0.5, transparent:true, opacity:0.30})
+);
+dbCyl.rotation.z = Math.PI/2; dbCyl.position.set(-4, 0, Z.db);
+dbGroup.add(dbCyl);
+const dbLabel = makeLabel('pgvector · vector(384) · 5,864 chunks', '#2fd6a0', 30);
+dbLabel.position.set(-4, 12, Z.db); dbGroup.add(dbLabel);
+// stored points inside DB
+const DBN = 300;
+const dbPGeo = new THREE.BufferGeometry();
+const dbPPos = new Float32Array(DBN*3);
+const dbPCol = new Float32Array(DBN*3);
+dbPGeo.setAttribute('position', new THREE.BufferAttribute(dbPPos,3));
+dbPGeo.setAttribute('color', new THREE.BufferAttribute(dbPCol,3));
+const dbP = new THREE.Points(dbPGeo, new THREE.PointsMaterial({size:0.9, vertexColors:true,
+  map:radialTex('#ffffff'), transparent:true, opacity:0.0, blending:THREE.AdditiveBlending, depthWrite:false}));
+dbGroup.add(dbP);
+for(let i=0;i<DBN;i++){
+  const li=i%LAWS.length;
+  const ang=Math.random()*Math.PI*2, rr=Math.random()*8, xx=(Math.random()-0.5)*17;
+  dbPPos[i*3]= -4 + xx; dbPPos[i*3+1]=Math.cos(ang)*rr; dbPPos[i*3+2]= Z.db + Math.sin(ang)*rr;
+  cc.set(LAWS[li].color); dbPCol[i*3]=cc.r; dbPCol[i*3+1]=cc.g; dbPCol[i*3+2]=cc.b;
+}
+dbPGeo.attributes.color.needsUpdate=true;
+
+// USER query sphere
+const userGrp = new THREE.Group(); scene.add(userGrp);
+const userBall = new THREE.Mesh(new THREE.SphereGeometry(1.6, 32, 32),
+  new THREE.MeshStandardMaterial({color:0xe0b3ff, emissive:0xc78bff, emissiveIntensity:1.4, roughness:0.3}));
+const userGlow = glow('#e0b3ff', 9, 0.7);
+userBall.add(userGlow);
+userGrp.add(userBall);
+const userLbl = makeLabel('"'+REAL_QUESTION+'"', '#e0b3ff', 30);
+userLbl.position.set(0, 4.5, 0); userGrp.add(userLbl);
+userBall.position.set(-46, 14, Z.topk);
+userLbl.position.set(-46, 18.6, Z.topk);
+
+// dense + bm25 rank racks
+const denseGrp = new THREE.Group(); const bmGrp = new THREE.Group();
+scene.add(denseGrp, bmGrp);
+const denseSlots=[], bmSlots=[];
+for(let i=0;i<12;i++){
+  const y=14 - i*2.4;
+  const b=new THREE.Mesh(new THREE.BoxGeometry(5,1.3,1.3),
+    new THREE.MeshStandardMaterial({color:0x4d9bff, emissive:0x4d9bff, emissiveIntensity:0.35, transparent:true, opacity:0.9}));
+  b.position.set(-22, y, Z.topk+5); denseGrp.add(b); denseSlots.push({mesh:b,base:y});
+  const b2=new THREE.Mesh(new THREE.BoxGeometry(5,1.3,1.3),
+    new THREE.MeshStandardMaterial({color:0xff8fa3, emissive:0xff8fa3, emissiveIntensity:0.35, transparent:true, opacity:0.9}));
+  b2.position.set(22, y, Z.topk+5); bmGrp.add(b2); bmSlots.push({mesh:b2,base:y});
+}
+const denseLbl = makeLabel('DENSE · cosine ≤> · LIMIT 40', '#4d9bff', 28);
+denseLbl.position.set(-22, 17.5, Z.topk+5); scene.add(denseLbl);
+const bmLbl = makeLabel('BM25 · k1=1.5 b=0.75 · IDF', '#ff8fa3', 28);
+bmLbl.position.set(22, 17.5, Z.topk+5); scene.add(bmLbl);
+
+// RRF fusion block
+const rrfBlock = new THREE.Mesh(new THREE.BoxGeometry(8,8,3),
+  new THREE.MeshStandardMaterial({color:0x2a1d52, emissive:0xc78bff, emissiveIntensity:0.4, transparent:true, opacity:0.55}));
+rrfBlock.position.set(0, 2, Z.topk); scene.add(rrfBlock);
+const rrfLbl = makeLabel('RRF  Σ 1/(60+rank)  wᵈ=1.0 wᵇ=0.35', '#c78bff', 28);
+rrfLbl.position.set(0, 7.5, Z.topk); scene.add(rrfLbl);
+
+// context / gate
+const gateLbl = makeLabel('admit: sim ≥ 0.78 OR bm25 ≥ 0.6·best', '#ffd28a', 26, '600');
+gateLbl.position.set(0, 11, Z.gen-6); scene.add(gateLbl);
+
+// Gemini orb
+const gemOrb = new THREE.Mesh(new THREE.IcosahedronGeometry(3.2, 3),
+  new THREE.MeshStandardMaterial({color:0x9faeff, emissive:0x7c9cff, emissiveIntensity:0.9, roughness:0.3, flatShading:true}));
+gemOrb.position.set(24, 4, Z.gen); scene.add(gemOrb);
+gemOrb.add(glow('#9faeff', 16, 0.55));
+const gemLbl = makeLabel('Gemini · generate_answer', '#9faeff', 30);
+gemLbl.position.set(24, 9.5, Z.gen); scene.add(gemLbl);
+
+// answer card
+const ansLbl = makeLabel(REAL_ANSWER.split('\n')[0], '#b9c7ff', 30);
+ansLbl.position.set(52, 8, Z.gen); scene.add(ansLbl);
+const ansCard = new THREE.Mesh(new THREE.PlaneGeometry(20, 12),
+  new THREE.MeshBasicMaterial({map: radialTex('#b9c7ff'), transparent:true, opacity:0.0, blending:THREE.AdditiveBlending, depthWrite:false}));
+ansCard.position.set(54, 2, Z.gen); scene.add(ansCard);
+
+// CRAG red gate zone
+const cragLbl = makeLabel('CRAG  best sim < 0.78  →  adala → ism → ddg', '#ff5d8f', 26, '600');
+cragLbl.position.set(-40, -16, Z.topk); scene.add(cragLbl);
+
+/* --- paths -------------------------------------------------------- */
+const pDocToChunk = LAWS.map((L,i)=>{
+  const y=(i-(LAWS.length-1)/2)*4.4;
+  return curveFrom([[ -60+(i%2)*3, y, Z.docs+0.6],[ -76, y, Z.chunk]]);
+});
+const pChunkToEmb  = curveFrom([[-70,0,Z.chunk],[-30,2,Z.embed+2],[6,0,Z.embed]]);
+const pEmbToDb     = curveFrom([[6,0,Z.embed],[0,0,Z.db-10],[-4,0,Z.db-9]]);
+const pDbToTopk    = curveFrom([[-4,0,Z.db+9],[-14,6,Z.topk+10],[-22,10,Z.topk+5]]);
+const pTopkToRRF   = curveFrom([[-22,4,Z.topk+5],[0,2,Z.topk],[22,4,Z.topk+5]]);
+const pRRFToGen    = curveFrom([[0,2,Z.topk],[14,4,Z.gen-8],[24,4,Z.gen-4]]);
+const pUserToDense = curveFrom([[-46,14,Z.topk],[-34,12,Z.topk+3],[-22,10,Z.topk+5]]);
+const pUserToBM    = curveFrom([[-46,14,Z.topk],[-10,10,Z.topk+4],[22,10,Z.topk+5]]);
+const pCragToRRF   = curveFrom([[-40,-16,Z.topk],[-20,-6,Z.topk+2],[0,-2,Z.topk]]);
+
+// add visual tubes (faint)
+const tubes = [
+  tube(pChunkToEmb, 0x7faeff, 0.10, 0.18),
+  tube(pEmbToDb,    0x2fd6a0, 0.10, 0.20),
+  tube(pDbToTopk,   0x4d9bff, 0.08, 0.16),
+  tube(pRRFToGen,   0xc78bff, 0.10, 0.18),
+];
+
+// flows
+const flows = {
+  docs:  pDocToChunk.map((c,i)=>new Flow(c, 0xffb454, 10, 0.10, 0.9, i*0.03, false)),
+  chunk: [new Flow(pChunkToEmb, 0x7faeff, 18, 0.12, 0.95, 0, false)],
+  emb:   [new Flow(pEmbToDb, 0x2fd6a0, 16, 0.14, 0.95, 0, false)],
+  dense: [new Flow(pUserToDense, 0x4d9bff, 10, 0.2, 0.9, 0, false), new Flow(pDbToTopk, 0x4d9bff, 12, 0.12, 0.9, 0, false)],
+  bm25:  [new Flow(pUserToBM, 0xff8fa3, 10, 0.2, 0.9, 0, false)],
+  rrf:   [new Flow(pTopkToRRF, 0xc78bff, 14, 0.14, 0.95, 0, false)],
+  gen:   [new Flow(pRRFToGen, 0x9faeff, 14, 0.13, 1.0, 0, false)],
+  crag:  [new Flow(pCragToRRF, 0xff5d8f, 12, 0.16, 0.95, 0, false)],
+};
+function showFlows(keys, on){ keys.forEach(k=>flows[k].forEach(f=>f.visible=on)); }
+
+/* ------------------------------------------------------------------ *
+ *  PROGRESSIVE STATE
+ * ------------------------------------------------------------------ */
+let t = 0;            // scene clock (seconds since scene start)
+const state = {};
+
+function resetAll(){
+  chunkPts.material.opacity = 0;
+  embPts.material.opacity = 0;
+  dbP.material.opacity = 0;
+  ansCard.material.opacity = 0;
+  dbCyl.material.opacity = 0.30;
+  gemOrb.rotation.set(0,0,0);
+  Object.values(flows).forEach(arr=>arr.forEach(f=>f.visible=false));
+  denseGrp.visible = true; bmGrp.visible = true;
+  rrfBlock.visible = true; gemOrb.visible = true;
+  docs.forEach(d=>{d.mesh.material.opacity=0.9; d.mesh.position.copy(d.base);});
+  userGrp.visible = true;
+  denseSlots.forEach(s=>s.mesh.material.opacity=0.9);
+  bmSlots.forEach(s=>s.mesh.material.opacity=0.9);
+}
+
+const SCENES = [
+  {
+    id:'overview', title:'0 · Overview',
+    caption:'The full journey: <b>9 Moroccan law documents → 5,864 chunks → 384-d embeddings → pgvector → hybrid search → grounded answer</b>. Drag to orbit.',
+    dur: 12000,
+    update(){}
+  },
+  {
+    id:'ingest', title:'1 · Ingest',
+    caption:'<b>Ingestion:</b> 9 corpus files are loaded and pass <span class="k">pdf_health_check</span> (≥20k chars, ≥15 chunks, avg ≤2500 chars, ≥50% article chunks). Rejected: broken-font &amp; image-only PDFs.',
+    dur: 12000,
+    update(){ docs.forEach((d,i)=>{ d.mesh.position.y = d.base.y + Math.sin(t*1.5+i)*0.25; }); showFlows(['docs'], t>1.5); }
+  },
+  {
+    id:'chunk', title:'2 · Chunk',
+    caption:'<b>Chunking:</b> each <span class="k">المادة N</span> marker becomes one chunk; articles > 4,000 chars are windowed with 200-char overlap. e.g. «'+REAL_CHUNK.slice(0,52)+'…»',
+    dur: 13000,
+    update(){
+      showFlows(['docs'], true);
+      const p = smooth(Math.min(1, Math.max(0,(t-1)/3)));
+      chunkPts.material.opacity = p;
+      const arr = chunkPts.geometry.attributes.position.array;
+      for(let i=0;i<CHUNK_N;i++){
+        const s=chunkStart[i], e=chunkTargets[i];
+        arr[i*3] = s.x+(e.x-s.x)*p;
+        arr[i*3+1] = s.y+(e.y-s.y)*p + Math.sin(t*2+i)*0.15*p;
+        arr[i*3+2] = s.z+(e.z-s.z)*p;
+      }
+      chunkPts.geometry.attributes.position.needsUpdate=true;
+    }
+  },
+  {
+    id:'embed', title:'3 · Embed',
+    caption:'<b>Embedding:</b> <span class="k">intfloat/multilingual-e5-small</span> turns each chunk into a <b>384-d unit vector</b> (prefix <span class="k">passage:</span>). Similar meaning → nearby points. Cosine = dot product.',
+    dur: 13000,
+    update(){
+      showFlows(['docs','chunk'], true);
+      chunkPts.material.opacity = 1;
+      const p = smooth(Math.min(1, Math.max(0,(t-1)/3)));
+      embPts.material.opacity = p;
+      const arr = embPts.geometry.attributes.position.array;
+      for(let i=0;i<EMB_N;i++){
+        const src = chunkTargets[i % CHUNK_N];
+        const e = embTargets[i];
+        arr[i*3] = src.x+(e.x-src.x)*p;
+        arr[i*3+1] = src.y+(e.y-src.y)*p;
+        arr[i*3+2] = src.z+(e.z-src.z)*p;
+      }
+      embPts.geometry.attributes.position.needsUpdate=true;
+    }
+  },
+  {
+    id:'db', title:'4 · Store',
+    caption:'<b>Storage:</b> upsert into <span class="k">documents(content, embedding vector(384), law, article)</span> with idempotency key <span class="k">(law, article, md5(content))</span>. No ANN index — exact scan over 5,864 rows ≈ 1 ms.',
+    dur: 12000,
+    update(){
+      showFlows(['docs','chunk'], true);
+      chunkPts.material.opacity=1; embPts.material.opacity=1;
+      dbCyl.material.opacity = 0.30 + Math.sin(t*2)*0.05;
+      const p = smooth(Math.min(1, Math.max(0,(t-1)/2.5)));
+      dbP.material.opacity = p;
+      showFlows(['emb'], t>1);
+      dbGroup.rotation.y = Math.sin(t*0.3)*0.08;
+    }
+  },
+  {
+    id:'query', title:'5 · Query',
+    caption:'<b>Query:</b> «'+REAL_QUESTION+'» is embedded with the <span class="k">query:</span> prefix. Two retrievers race: <b>Dense</b> (cosine ≤>, LIMIT 40) and <b>BM25</b> (lexical, k1=1.5, b=0.75).',
+    dur: 14000,
+    update(){
+      showFlows(['docs','chunk','emb'], true);
+      chunkPts.material.opacity=1; embPts.material.opacity=1; dbP.material.opacity=1;
+      userGrp.visible=true;
+      userBall.position.y = 14 + Math.sin(t*2)*0.5;
+      userBall.rotation.y = t;
+      const p = smooth(Math.min(1, Math.max(0,(t-0.5)/2)));
+      userBall.position.x = -46 + p*0;
+      showFlows(['dense','bm25'], t>1);
+      denseSlots.forEach((s,i)=>{ s.mesh.material.opacity = (i<10)?0.95:0.3; });
+      bmSlots.forEach((s,i)=>{ s.mesh.material.opacity = (i<10)?0.95:0.3; });
+    }
+  },
+  {
+    id:'cosine', title:'6 · Cosine',
+    caption:'<b>Cosine similarity</b> = <span class="k">1 − (embedding ≤> query)</span> ∈ [0,1]. Nearest cluster = highest score; a chunk is admitted if <span class="k">sim ≥ 0.78</span> OR it is a strong BM25 hit.',
+    dur: 14000,
+    update(){
+      showFlows(['docs','chunk','emb','dense','bm25'], true);
+      chunkPts.material.opacity=1; embPts.material.opacity=1; dbP.material.opacity=1;
+      userGrp.visible=true; userBall.rotation.y=t;
+      // expanding scan rings from db
+      const rings = (t*0.7)%1;
+      denseSlots.forEach((s,i)=>{ s.mesh.material.opacity = 0.4+0.5*smooth(Math.max(0,1-Math.abs(i/10-rings)*3)); });
+      bmSlots.forEach((s,i)=>{ s.mesh.material.opacity = 0.4+0.5*smooth(Math.max(0,1-Math.abs(i/10-rings)*3)); });
+    }
+  },
+  {
+    id:'rrf', title:'7 · RRF',
+    caption:'<b>Reciprocal Rank Fusion:</b> cosine [0,1] and BM25 (unbounded) can\'t be added, so we fuse <b>ranks</b>: <span class="k">Σ 1/(60+rank)</span>, wᵈ=1.0, wᵇ=0.35. Top 10 chunks become context.',
+    dur: 14000,
+    update(){
+      showFlows(['docs','chunk','emb','dense','bm25'], true);
+      chunkPts.material.opacity=1; embPts.material.opacity=1; dbP.material.opacity=1;
+      userGrp.visible=true; userBall.rotation.y=t;
+      denseSlots.forEach(s=>s.mesh.material.opacity=0.7);
+      bmSlots.forEach(s=>s.mesh.material.opacity=0.7);
+      showFlows(['rrf'], t>0.8);
+      rrfBlock.rotation.y = t*0.5;
+      rrfBlock.material.emissiveIntensity = 0.4 + Math.sin(t*3)*0.2;
+    }
+  },
+  {
+    id:'crag', title:'8 · CRAG',
+    caption:'<b>Corrective RAG</b> (only if best dense sim &lt; 0.78): fetch fresh text from trusted sources <span class="k">adala → ism → ddg</span> (.ma only), keep chunks with stem-overlap relevance ≥ 0.25, max 3.',
+    dur: 13000,
+    update(){
+      showFlows(['docs','chunk','emb','dense','bm25','rrf','crag'], true);
+      chunkPts.material.opacity=1; embPts.material.opacity=1; dbP.material.opacity=1;
+      userGrp.visible=true;
+      cragLbl.material.opacity = 0.6 + 0.4*Math.sin(t*4);
+      rrfBlock.rotation.y = t*0.5;
+    }
+  },
+  {
+    id:'gen', title:'9 · Generate',
+    caption:'<b>Generation:</b> <span class="k">gemini-3.1-flash-lite</span> answers using only context, with law-qualified citations like «'+REAL_ANSWER.split('\n')[1].replace('• ','')+'». Answer + sources + follow-ups returned to the chat UI.',
+    dur: 14000,
+    update(){
+      showFlows(['docs','chunk','emb','dense','bm25','rrf','gen'], true);
+      chunkPts.material.opacity=1; embPts.material.opacity=1; dbP.material.opacity=1;
+      userGrp.visible=true;
+      gemOrb.rotation.y = t*0.6; gemOrb.rotation.x = t*0.3;
+      gemOrb.material.emissiveIntensity = 0.9 + Math.sin(t*3)*0.3;
+      showFlows(['gen'], t>0.6);
+      const p = smooth(Math.min(1, Math.max(0,(t-2)/2)));
+      ansCard.material.opacity = p*0.35;
+    }
+  },
+];
+
+/* --- UI ----------------------------------------------------------- */
+const stagesEl = document.getElementById('stages');
+const dotsEl   = document.getElementById('dots');
+const captionEl= document.getElementById('caption');
+const btnPlay  = document.getElementById('play');
+SCENES.forEach((s,i)=>{
+  const b=document.createElement('button'); b.textContent=s.title; b.onclick=()=>go(i); stagesEl.appendChild(b);
+  const d=document.createElement('button'); d.onclick=()=>go(i); dotsEl.appendChild(d);
+});
+let playing=false, timer=null, sceneDur=SCENES[0].dur, remain=0, t0=0;
+
+function refreshUI(){
+  [...stagesEl.children].forEach((b,i)=>b.classList.toggle('on', i===current));
+  [...dotsEl.children].forEach((b,i)=>b.classList.toggle('on', i===current));
+  captionEl.innerHTML = SCENES[current].caption;
+}
+function go(i){
+  current=(i+SCENES.length)%SCENES.length;
+  t=0; resetAll();
+  sceneDur=SCENES[current].dur; remain=sceneDur;
+  refreshUI();
+  if(playing) arm(sceneDur);
+}
+function arm(ms){ clearTimeout(timer); t0=performance.now(); timer=setTimeout(()=>{
+  if(document.getElementById('auto').checked) go(current+1);
+  else { remain=0; setPaused(true); }
+}, ms); }
+function setPaused(p){
+  playing=!p;
+  btnPlay.textContent = p ? '▶ Play' : '❚❚ Pause';
+  clearTimeout(timer);
+  if(!p) arm(remain>0?remain:sceneDur);
+  else if(sceneDur>0) remain = Math.max(0, sceneDur-(performance.now()-t0));
+}
+btnPlay.onclick=()=>setPaused(!playing);
+document.getElementById('prev').onclick=()=>go(current-1);
+document.getElementById('next').onclick=()=>go(current+1);
+document.getElementById('replay').onclick=()=>go(current);
+document.getElementById('auto').onchange=()=>{ if(playing && document.getElementById('auto').checked) arm(remain); };
+addEventListener('keydown', e=>{
+  if(e.key===' '){ e.preventDefault(); setPaused(!playing); }
+  if(e.key==='ArrowRight') go(current+1);
+  if(e.key==='ArrowLeft') go(current-1);
+  if(e.key==='r'||e.key==='R') go(current);
+});
+
+/* ------------------------------------------------------------------ *
+ *  RENDER LOOP
+ * ------------------------------------------------------------------ */
+let last=performance.now();
+function loop(now){
+  requestAnimationFrame(loop);
+  const dt=(now-last)/1000; last=now;
+  if(playing) t+=dt;
+  SCENES[current].update();
+  Object.values(flows).forEach(arr=>arr.forEach(f=>{ if(f.visible) f.update(playing?t: t); }));
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+addEventListener('resize', ()=>{
+  camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// start
+go(0);
+setPaused(false);
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

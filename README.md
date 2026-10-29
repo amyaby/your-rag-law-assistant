@@ -3778,3 +3778,56 @@ headless browser costs 1-3s startup plus ~100-300MB RAM to render JavaScript tha
 data here, and it would force a browser User-Agent/fingerprint — breaking the "same identity for the
 robots.txt check and the request" rule enforced in `scraper.py:120-133`. Selenium is only warranted
 if `pageProps` came back empty (signal of a fully client-rendered page).
+
+
+---
+
+## 📋 ADDITION: Interview Cheat-Sheet — JS & FastAPI Concepts to Master
+(Appended for quick reference during interviews or development)
+
+# 1) What the snippet actually does (the "what")
+| Piece | Meaning |
+|---|---|
+| <button data-prompt="..."> | Button carries exact text to send to server |
+| click event | Browser fires click; JS listener (bindPrompt) handles it |
+| bindPrompt() | Reads data-prompt → puts into input field (#q) |
+| ask() | Builds payload, calls fetch(), handles response |
+| fetch() | Browser HTTP client; sends POST to FastAPI |
+| /ask endpoint | Receives JSON, runs RAG pipeline, returns JSON |
+| /conversations/{id} | Returns conversation history |
+| /reset | Drops/recreates DB tables |
+| /static/* | Served by FastAPI StaticFiles mount |
+
+# 2) JS fundamentals for this project
+| Concept | Example / Use |
+|---|---|
+| DOM selection | document.getElementById("q") |
+| Event listener | btn.addEventListener("click", ask) |
+| fetch() / async-await | await fetch("/ask", {method:"POST", body: JSON.stringify(...)}) |
+| JSON ↔ Python | FastAPI auto-converts via Pydantic |
+| DOM manipulation | row.innerHTML = ...; appendChild() |
+| Event propagation | Click bubbles; listener handles it |
+
+# 3) FastAPI fundamentals
+| Concept | Project Example |
+|---|---|
+| FastAPI() | app = FastAPI(title="Moroccan Law Assistant") |
+| Route decorator | @app.post("/ask") → def ask(req: AskRequest) |
+| BaseModel / Pydantic | class AskRequest(BaseModel): question: str |
+| Startup event | @app.on_event("startup") → create_table() |
+| StaticFiles | app.mount("/static", StaticFiles(directory="static")) |
+| FileResponse | return FileResponse("static/index.html") |
+| HTTPException | raise HTTPException(status_code=404, detail="not found") |
+
+# 4) Big picture flow
+UI (HTML/JS) → fetch("/ask") → FastAPI → retrieve() → LLM → DB save → JSON → JS renders answer + sources + suggestions.
+
+# 5) Interview checklist — say this in 30 sec
+- FastAPI routes validate JSON via Pydantic (AskRequest / IngestRequest)
+- /ask pipeline: rephrase → memory → hybrid (dense+BM25+RRF) → CRAG (if best_dense < 0.78) → generate_answer → persist → return
+- config.py = single source of truth; properties (fallback_models, allowed_domains) parse env strings
+- chunker = article regex split + quality gate (pdf_health_check); embed = same e5 model for passage/query with prefixes
+- UI never touches DB directly; fetch()/JSON is the only bridge
+
+Keep this handy — it covers what you need for JS, FastAPI, the full pipeline, and interview explanations.
+

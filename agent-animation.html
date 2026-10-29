@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chatbot vs RAG vs Agentic vs Agent — Playable Animation</title>
+<style>
+  :root{
+    --bg:#0b1020;
+    --panel:#121a33;
+    --panel2:#0f1730;
+    --txt:#e8edff;
+    --muted:#93a0c8;
+    --c-llm:#7c9cff;
+    --c-rag:#2fd6a0;
+    --c-tool:#ffb454;
+    --c-agent:#ff5d8f;
+    --c-user:#c78bff;
+    --pd:11s;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;background:
+      radial-gradient(1200px 600px at 10% -10%, #1b2450 0%, transparent 60%),
+      radial-gradient(1000px 500px at 110% 10%, #2a1740 0%, transparent 55%),
+      var(--bg);
+    color:var(--txt);
+    font-family:ui-sans-serif,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.5;
+  }
+
+  /* ---------- header ---------- */
+  header{max-width:1150px;margin:0 auto;padding:26px 20px 4px;text-align:center}
+  h1{margin:0 0 6px;font-size:clamp(22px,3.4vw,34px);letter-spacing:-.5px}
+  .sub{color:var(--muted);font-size:14.5px;max-width:760px;margin:0 auto}
+  .progress{height:6px;background:#1a2450;border-radius:999px;overflow:hidden;margin:16px auto 0;max-width:760px}
+  .progress i{display:block;height:100%;width:0;border-radius:999px;
+    background:linear-gradient(90deg,var(--c-user),var(--c-agent));
+    animation:grow linear forwards;animation-duration:var(--pd);animation-play-state:paused}
+  @keyframes grow{to{width:100%}}
+
+  /* ---------- deck ---------- */
+  main{max-width:1150px;margin:0 auto;padding:18px 20px 110px}
+  .slide{display:none;background:linear-gradient(180deg,var(--panel),var(--panel2));
+    border:1px solid #23305a;border-radius:18px;padding:20px 22px 22px;
+    box-shadow:0 12px 34px rgba(0,0,0,.4);position:relative;overflow:hidden}
+  .slide::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:var(--accent)}
+  .slide.active{display:block;animation:slideIn .45s ease}
+  @keyframes slideIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+
+  .shead{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .num{width:34px;height:34px;border-radius:10px;background:#1a2450;border:1px solid var(--accent);
+    color:var(--accent);font-weight:800;display:flex;align-items:center;justify-content:center;font-size:16px}
+  .shead h2{margin:0;font-size:21px}
+  .tag{font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;
+    padding:4px 10px;border-radius:999px;border:1px solid var(--accent);color:var(--accent)}
+  .stage{margin-top:14px;background:#0a1226;border:1px solid #1d2852;border-radius:14px;padding:6px 8px}
+  svg{width:100%;height:auto;display:block}
+
+  /* nodes & wires */
+  .node rect{fill:#141d3d;stroke:#33427c;stroke-width:1.5}
+  .node text{fill:#e8edff;font-size:13.5px;font-weight:700;text-anchor:middle;dominant-baseline:middle}
+  .node text.small{font-size:10.5px;font-weight:500;fill:#93a0c8}
+  .wire{stroke:#3a4a86;stroke-width:2;fill:none;marker-end:url(#arrow)}
+  .wire.soft{opacity:.5}
+  .wire.dash{stroke-dasharray:6 6}
+  .lbl{fill:#93a0c8;font-size:11px;text-anchor:middle}
+  .badge rect{fill:#1a2450;stroke:#3a4a86}
+  .badge text{font-size:11.5px;font-weight:800;text-anchor:middle}
+
+  /* ---------- animation engine ----------
+     every .anim is paused by default and runs only when body is not paused
+     and its slide is visible; JS restarts it on slide entry               */
+  .anim{animation-play-state:paused!important;animation-fill-mode:both}
+  body:not(.paused) .slide.active .anim{animation-play-state:running!important}
+
+  .node.anim{animation:pop .45s var(--delay,0s) both}
+  @keyframes pop{from{opacity:0;transform:translateY(8px) scale(.96)}to{opacity:1;transform:none}}
+  .badge.anim{animation:pop .5s var(--delay,0s) both}
+
+  .pkt{offset-rotate:0deg;animation:travel var(--dur,1.5s) var(--delay,0s) linear both;
+    filter:drop-shadow(0 0 6px currentColor)}
+  @keyframes travel{from{offset-distance:0%}to{offset-distance:100%}}
+
+  .cycle{stroke-dasharray:9 7;animation:dash 1.1s linear infinite both}
+  @keyframes dash{to{stroke-dashoffset:-32}}
+
+  .narr{list-style:none;margin:16px 0 0;padding:0;display:grid;gap:8px}
+  .narr li{display:flex;gap:10px;align-items:flex-start;font-size:14.5px;color:#d5ddff;
+    background:#101a3a;border:1px solid #22305c;border-radius:10px;padding:9px 12px}
+  .narr li b{color:var(--accent);font-weight:800}
+  .narr li::before{content:"▸";color:var(--accent);font-weight:800;line-height:1.4}
+  .narr li.anim{animation:fadeUp .5s var(--delay,0s) both}
+  @keyframes fadeUp{from{opacity:0;transform:translateX(-14px)}to{opacity:1;transform:none}}
+
+  .verdict{margin-top:12px;font-size:14px;color:#cdd7ff;background:#0e1734;
+    border-left:3px solid var(--accent);border-radius:8px;padding:9px 13px}
+  .verdict b{color:var(--accent)}
+  .verdict.anim{animation:fadeUp .5s var(--delay,0s) both}
+
+  /* ---------- controls ---------- */
+  .controls{position:fixed;left:0;right:0;bottom:0;z-index:50;
+    background:rgba(9,14,32,.92);backdrop-filter:blur(10px);border-top:1px solid #23305a;
+    display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;padding:12px 16px}
+  button{font:inherit;font-size:13.5px;font-weight:600;color:var(--txt);
+    background:#18224a;border:1px solid #2f3f7c;border-radius:10px;padding:8px 14px;cursor:pointer;
+    transition:.15s}
+  button:hover{background:#223069;transform:translateY(-1px)}
+  button.primary{background:linear-gradient(90deg,#5b6cf5,#a45bff);border-color:transparent;min-width:104px}
+  .dots{display:flex;gap:7px;margin-left:6px}
+  .dots button{width:12px;height:12px;min-width:0;padding:0;border-radius:50%;background:#26315f}
+  .dots button.on{background:linear-gradient(90deg,var(--c-user),var(--c-agent));transform:scale(1.25)}
+  .auto{font-size:13px;color:var(--muted);display:flex;gap:6px;align-items:center;user-select:none;cursor:pointer}
+  .kbd{font-size:11.5px;color:#6f7db0;margin-left:4px}
+
+  /* ---------- table slide ---------- */
+  table{width:100%;border-collapse:collapse;margin-top:14px;font-size:13.5px}
+  th,td{padding:9px 6px;text-align:center;border-bottom:1px solid #22305c}
+  th:first-child,td:first-child{text-align:left;font-weight:600}
+  th{color:var(--muted);font-size:11.5px;text-transform:uppercase;letter-spacing:.5px}
+  .yes{color:#2fd6a0;font-weight:800}.no{color:#ff6b81;font-weight:800}.part{color:#ffb454;font-weight:800}
+  tbody tr:hover{background:#131c3d}
+  .spectrum{margin-top:16px}
+  .spectrum p{font-size:13px;margin:12px 0 4px}
+  .bar{height:15px;border-radius:999px;background:#1a2450;overflow:hidden}
+  .bar i{display:block;height:100%;width:0;border-radius:999px;
+    background:linear-gradient(90deg,var(--c-user),var(--c-agent));
+    animation:barW 1.3s var(--delay,0s) cubic-bezier(.2,.8,.2,1) both}
+  @keyframes barW{to{width:var(--w)}}
+  .scale{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:6px}
+  @media (max-width:640px){.kbd{display:none}th,td{font-size:11.5px;padding:7px 3px}}
+</style>
+</head>
+<body class="paused">
+
+<header>
+  <h1>Chatbot → RAG → Agentic Chatbot → Agentic RAG → Agent</h1>
+  <p class="sub">A playable animated schema. Watch the glowing dot: it shows how information flows — and whether the system can <b>loop, decide and act</b>.</p>
+  <div class="progress"><i></i></div>
+</header>
+
+<main id="deck">
+
+  <!-- SLIDE 1 : CHATBOT -->
+  <section class="slide active" data-dur="11000" style="--accent:#7c9cff">
+    <div class="shead"><span class="num">1</span><h2>Plain Chatbot (pure LLM)</h2>
+      <span class="tag">no tools · no retrieval · one shot</span></div>
+    <div class="stage">
+      <svg viewBox="0 0 900 200" aria-label="Chatbot flow">
+        <defs><marker id="arrow" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+          <path d="M0,0 L7,3 L0,6 Z" fill="#3a4a86"/></marker></defs>
+        <g class="node anim" style="--delay:.1s">
+          <rect x="30" y="70" width="160" height="64" rx="12" style="stroke:#c78bff"/>
+          <text x="110" y="94">User</text><text x="110" y="116" class="small">"What's the capital of X?"</text>
+        </g>
+        <g class="node anim" style="--delay:.6s">
+          <rect x="365" y="55" width="190" height="95" rx="14" style="stroke:#7c9cff"/>
+          <text x="460" y="88">LLM</text>
+          <text x="460" y="112" class="small">answers from trained weights</text>
+          <text x="460" y="132" class="small">⚠ no live data · no tools</text>
+        </g>
+        <g class="node anim" style="--delay:4.6s">
+          <rect x="715" y="70" width="160" height="64" rx="12" style="stroke:#7c9cff"/>
+          <text x="795" y="94">Answer</text><text x="795" y="116" class="small">from memory only</text>
+        </g>
+        <path class="wire" d="M190,102 L360,102"/>
+        <path class="wire" d="M555,102 L710,102"/>
+        <text class="lbl" x="275" y="90">prompt</text>
+        <text class="lbl" x="632" y="90">text out</text>
+        <g class="badge anim" style="--delay:6.6s">
+          <rect x="378" y="168" width="164" height="24" rx="12"/>
+          <text x="460" y="184" fill="#ff8fa3">NO TOOLS · NO LOOP</text>
+        </g>
+        <circle class="pkt anim" r="7" cx="0" cy="0" fill="#c78bff" style="color:#c78bff;offset-path:path('M190,102 L360,102');--delay:1s;--dur:1.5s"/>
+        <circle class="pkt anim" r="7" cx="0" cy="0" fill="#7c9cff" style="color:#7c9cff;offset-path:path('M555,102 L710,102');--delay:2.7s;--dur:1.5s"/>
+      </svg>
+    </div>
+    <ul class="narr">
+      <li class="anim" style="--delay:.2s">You type a question → it goes straight to the <b>LLM</b>.</li>
+      <li class="anim" style="--delay:4.8s">The LLM replies purely from what it <b>learned during training</b> — frozen weights, no lookup, no API.</li>
+      <li class="anim" style="--delay:7.2s">Prompt in → text out. <b>One shot</b>: it cannot check anything, retry, or decide its next step.</li>
+    </ul>
+    <div class="verdict anim" style="--delay:8.6s"><b>That's a chatbot.</b> Chat-shaped UI, zero autonomy — even if it <i>sounds</i> agentic.</div>
+  </section>
+
+  <!-- SLIDE 2 : RAG -->
+  <section class="slide" data-dur="13000" style="--accent:#2fd6a0">
+    <div class="shead"><span class="num">2</span><h2>RAG (Retrieval-Augmented Generation)</h2>
+      <span class="tag">retrieve → generate · still linear</span></div>
+    <div class="stage">
+      <svg viewBox="0 0 900 220" aria-label="RAG flow">
+        <g class="node anim" style="--delay:.1s">
+          <rect x="20" y="100" width="130" height="60" rx="12" style="stroke:#c78bff"/>
+          <text x="85" y="124">User</text><text x="85" y="146" class="small">question</text>
+        </g>
+        <g class="node anim" style="--delay:.7s">
+          <rect x="215" y="25" width="160" height="54" rx="12" style="stroke:#2fd6a0"/>
+          <text x="295" y="47">Vector DB</text><text x="295" y="67" class="small">your documents</text>
+        </g>
+        <g class="node anim" style="--delay:1s">
+          <rect x="215" y="100" width="160" height="60" rx="12" style="stroke:#2fd6a0"/>
+          <text x="295" y="124">Retriever</text><text x="295" y="146" class="small">search embeddings</text>
+        </g>
+        <g class="node anim" style="--delay:3.6s">
+          <rect x="470" y="88" width="185" height="84" rx="14" style="stroke:#7c9cff"/>
+          <text x="562" y="116">LLM</text>
+          <text x="562" y="140" class="small">question + retrieved context</text>
+          <text x="562" y="159" class="small">= grounded answer</text>
+        </g>
+        <g class="node anim" style="--delay:6.2s">
+          <rect x="745" y="100" width="140" height="60" rx="12" style="stroke:#7c9cff"/>
+          <text x="815" y="124">Answer</text><text x="815" y="146" class="small">+ citations</text>
+        </g>
+        <path class="wire" d="M150,130 L210,130"/>
+        <path class="wire dash" d="M295,79 L295,96"/>
+        <path class="wire" d="M375,130 L465,130"/>
+        <path class="wire" d="M655,130 L740,130"/>
+        <text class="lbl" x="180" y="118">query</text>
+        <text class="lbl" x="420" y="118">docs</text>
+        <text class="lbl" x="697" y="118">tokens</text>
+        <g class="badge anim" style="--delay:7.6s">
+          <rect x="330" y="188" width="250" height="24" rx="12"/>
+          <text x="455" y="204" fill="#ff8fa3">FIXED PIPELINE — NO LOOP</text>
+        </g>
+        <text class="lbl anim" style="--delay:8.4s" x="690" y="204" fill="#6f7db0">retrieves exactly ONCE</text>
+        <circle class="pkt anim" r="7" cx="0" cy="0" fill="#c78bff" style="color:#c78bff;offset-path:path('M150,130 L210,130');--delay:1.4s;--dur:1s"/>
+        <circle class="pkt anim" r="7" cx="0" cy="0" fill="#2fd6a0" style="color:#2fd6a0;offset-path:path('M295,79 L295,96');--delay:2.5s;--dur:.7s"/>
+        <circle class="pkt anim" r="7" cx="0" cy="0" fill="#2fd6a0" style="color:#2fd6a0;offset-path:path('M375,130 L465,130');--delay:3.2s;--dur:1.1s"/>
+        <circle class="pkt anim" r="7" cx="0" cy="0" fill="#7c9cff" style="color:#7c9cff;offset-path:path('M655,130 L740,130');--delay:5.2s;--dur:1.1s"/>
+      </svg>
+    </div>
+    <ul class="narr">
+      <li class="anim" style="--delay:.3s">Before answering, the system <b>fetches relevant chunks</b> from your own documents (vector DB).</li>
+      <li class="anim" style="--delay:5s">Chunks are stuffed into the prompt → the LLM answers with <b>grounded context + citations</b> instead of hallucinating.</li>
+      <li class="anim" style="--delay:8s">But the flow is a <b>fixed one-way pipeline</b>: it retrieves once, never checks quality, never re-plans.</li>
+    </ul>
+    <div class="verdict anim" style="--delay:10s"><b>A smarter chatbot, still not an agent.</b> It has <i>one tool</i> hard-wired in a fixed order — zero decisions of its own.</div>
+  </section>
+
+  <!-- SLIDE 3 : AGENTIC CHATBOT -->
+  <section class="slide" data-dur="13000" style="--accent:#ffb454">
+    <div class="shead"><span class="num">3</span><h2>Agentic Chatbot</h2>
+      <span class="tag">uses tools · but stays on rails</span></div>
+    <div class="stage">
+      <svg viewBox="0 0 900 280" aria-label="Agentic chatbot flow">
+        <g class="node anim" style="--delay:.1s">
+          <rect x="20" y="95" width="150" height="62" rx="12" style="stroke:#c78bff"/>
+          <text x="95" y="120">User</text><text x="95" y="143" class="small">"weather in Paris?"</text>
+        </g>
+        <g class="node anim" style="--delay:.7s">
+          <rect x="310" y="80" width="190" height="92" rx="14" style="stroke:#7c9cff"/>
+          <text x="405" y="110">LLM</text>
+          <text x="405" y="134" class="small">"I need live data…"</text>
+          <text x="405" y="154" class="small">→ calls 1 tool → replies</text>
+        </g>
+        <g class="node anim" style="--delay:3.4s">
+          <rect x="640" y="25" width="175" height="54" rx="12" style="stroke:#ffb454"/>
+          <text x="727" y="47">Weather API</text><text x="727" y="66" class="small">external tool</text>
+        </g>
+        <g class="node anim" style="--delay:4s">
+          <rect x="640" y="100" width="175" height="54" rx="12" style="stroke:#ffb454"/>
+          <text x="727" y="122">Calculator</text><text x="727" y="141" class="small">external tool</text>
+        </g>
+        <g class="node anim" style="--delay:4.6s">
+          <rect x="640" y="175" width="175" height="54" rx="12" style="stroke:#ffb454"/>
+          <text x="727" y="197">Search</text><text x="727" y="216" class="small">external tool</text>
+        </g>
+        <g class="node anim" style="--delay:6.4s">
+          <rect x="310" y="215" width="190" height="54" rx="12" style="stroke:#7c9cff"/>
+          <text x="405" y="237">Answer</text><text x="405" y="256" class="small">"21°C, sunny"</text>
+        </g>
+        <path class="wire" d="M170,126 L305,126"/>
+        <path class="wire dash" d="M500,105 L635,60"/>
+        <path class="wire dash" d="M500,126 L635,127"/>
+        <path class="wire dash" d="M500,148 L635,195"/>
+        <path class="wire soft" d="M640,60 L505,100"/>
+        <path class="wire" d="M405,172 L405,210"/>
+        <text class="lbl" x="240" y="114">request</text>
+        <text class="lbl" x="570" y="72" fill="#ffb454">tool call</text>
+        <g class="badge anim" style="--delay:7.8s">
+          <rect x="590" y="248" width="290" height="24" rx="12"/>
+          <text x="735" y="264" fill="#ffd28a">SHALLOW: 1 TURNO · NO GOAL</text>
+        </g>
+        <circle class="pkt anim" r="7" cx="0" cy="0" fill="#c78bff" style="color:#c78bff;offset-path:path('M170,126 L305,126');--delay:1.2s;--dur:1.3s"/>
+        <circle class="pkt anim" r="7" cx="0" cy="0" fill="#ffb454" style="color:#ffb454;offset-path:path('M500,126 L635,127');--delay:3s;--dur:1.2s"/>
+        <circle class="pkt anim" r="7" cx="0" cy="0" fill="#ffb454" style="color:#ffb454;offset-path:path('M640,127 L505,126');--delay:4.5s;--dur:1.2s"/>
+        <circle class="pkt anim" r="7" cx="0" cy="0" fill="#7c9cff" style="color:#7c9cff;offset-path:path('M405,172 L405,210');--delay:6.1s;--dur:.9s"/>
+      </svg>
+    </div>
+    <ul class="narr">
+      <li class="anim" style="--delay:.3s">The LLM can now <b>call predefined tools</b> — weather API, calculator, search — to actually <i>do</i> things.</li>
+      <li class="anim" style="--delay:5s">So it looks agentic… but it's usually <b>one request → one tool → one reply</b>, from a fixed menu.</li>
+      <li class="anim" style="--delay:8.5s">It <b>reacts</b> to your message. It never pursues a long-running goal, never builds a plan, never retries.</li>
+    </ul>
+    <div class="verdict anim" style="--delay:10.5s"><b>Tool use ≠ agent.</b> This is a chatbot with tools — narrow scope, shallow loop, no autonomy. (Most "AI agents" in marketing are this.)</div>
+  </section>
+
+  <!-- SLIDE 4 : AGENTIC RAG -->
+  <section class="slide" data-dur="15000" style="--accent:#2fd6a0">
+    <div class="shead"><span class="num">4</span><h2>Agentic RAG</h2>
+      <span class="tag">RAG + a reasoning loop</span></div>
+    <div class="stage">
+      <svg viewBox="0 0 900 290" aria-label="Agentic RAG loop">
+        <g class="node anim" style="--delay:.1s">
+          <rect x="20" y="115" width="140" height="60" rx="12" style="stroke:#c78bff"/>
+          <text x="90" y="139">User</text><text x="90" y="161" class="small">complex question</text>
+        </g>
+        <g class="node anim" style="--delay:.7s">
+          <rect x="330" y="20" width="185" height="56" rx="12" style="stroke:#2fd6a0"/>
+          <text x="422" y="42">Vector DB / Web</text><text x="422" y="62" class="small">retrieval tool</text>
+        </g>
+        <g class="node anim" style="--delay:1.2s">
+          <rect x="335" y="110" width="215" height="95" rx="14" style="stroke:#2fd6a0"/>
+          <text x="442" y="140">Agentic RAG Core</text>
+          <text x="442" y="164" class="small">plan · retrieve · grade results</text>
+          <text x="442" y="184" class="small">rewrite query · repeat</text>
+        </g>
+        <g class="node anim" style="--delay:4.4s">
+          <rect x="700" y="45" width="170" height="60" rx="12" style="stroke:#ffb454"/>
+          <text x="785" y="68">LLM</text><text x="785" y="89" class="small">synthesizes the answer</text>
+        </g>
+        <g class="node anim" style="--delay:6.6s">
+          <rect x="700" y="175" width="170" height="60" rx="12" style="stroke:#2fd6a0"/>
+          <text x="785" y="198">Relevance check</text><text x="785" y="219" class="small">"is this good enough?"</text>
+        </g>
+        <path class="wire" d="M160,145 L330,145"/>
+        <path class="wire cycle" d="M422,110 L422,81" style="stroke:#2fd6a0"/>
+        <path class="wire" d="M545,130 L695,85" style="stroke:#ffb454"/>
+        <path class="wire" d="M785,105 L785,170"/>
+        <path class="wire cycle" d="M698,200 L560,182" style="stroke:#2fd6a0"/>
+        <text class="lbl" x="245" y="133" fill="#2fd6a0">ask</text>
+        <text class="lbl" x="630" y="98" fill="#ffb454">got chunks</text>
+        <text class="lbl" x="640" y="207" fill="#2fd6a0">weak? → retrieve again</text>
+        <g class="badge anim" style="--delay:9.2s">
+          <rect x="150" y="252" width="400" height="30" rx="14"/>
+          <text x="350" y="271" fill="#7dffc9">↻ WHILE loop: search → grade → re-search</text>
+        </g>
+        <circle class="pkt anim" r="7" cx="0" cy="0" fill="#c78bff" style="color:#c78bff;offset-path:path('M160,145 L330,145');--delay:1.4s;--dur:1.3s"/>
+        <circle class="pkt anim" r="7" cx="0" cy="0" fill="#2fd6a0" style="color:#2fd6a0;offset-path:path('M422,110 L422,81');--delay:3s;--dur:.9s"/>
+        <circle class="pkt anim" r="7" cx="0" cy="0" fill="#ffb454" style="color:#ffb454;offset-path:path('M545,130 L695,85');--delay:4.2s;--dur:1.3s"/>
+        <circle class="pkt anim" r="7" cx="0" cy="0" fill="#2fd6a0" style="color:#2fd6a0;offset-path:path('M785,105 L785,170');--delay:6s;--dur:1.1s"/>
+        <circle class="pkt anim" r="7" cx="0" cy="0" fill="#2fd6a0" style="color:#2fd6a0;offset-path:path('M698,200 L560,182');--delay:7.4s;--dur:1.3s"/>
+        <circle class="pkt anim" r="7" cx="0" cy="0" fill="#2fd6a0" style="color:#2fd6a0;offset-path:path('M422,110 L422,81');--delay:9.6s;--dur:.9s"/>
+        <circle class="pkt anim" r="7" cx="0" cy="0" fill="#ffb454" style="color:#ffb454;offset-path:path('M545,130 L695,85');--delay:11s;--dur:1.3s"/>
+      </svg>
+    </div>
+    <ul class="narr">
+      <li class="anim" style="--delay:.3s">Now the LLM <b>controls</b> retrieval instead of being wired to it: it decides <i>whether</i> to search and <i>what</i> to search.</li>
+      <li class="anim" style="--delay:5.5s">It <b>grades the results</b> — if the chunks are weak it rewrites the query and retrieves again, maybe hops to another source.</li>
+      <li class="anim" style="--delay:9.5s">Retrieval stopped being a fixed pipe and became <b>a tool the agent chooses</b>, in a loop, until it's confident.</li>
+    </ul>
+    <div class="verdict anim" style="--delay:12s"><b>RAG that thinks before it retrieves.</b> Classic RAG = <i>function call</i>. Agentic RAG = <i>loop with judgment</i>. Same ingredients, different control flow.</div>
+  </section>
+
+  <!-- SLIDE 5 : AGENT -->
+  <section class="slide" data-dur="17000" style="--accent:#ff5d8f">
+    <div class="shead"><span class="num">5</span><h2>Agent</h2>
+      <span class="tag">goal → plan → act → observe → repeat</span></div>
+    <div class="stage">
+      <svg viewBox="0 0 900 320" aria-label="Agent loop">
+        <g class="node anim" style="--delay:.1s">
+          <rect x="25" y="130" width="140" height="64" rx="12" style="stroke:#c78bff"/>
+          <text x="95" y="155">GOAL</text><text x="95" y="178" class="small">"book me a trip"</text>
+        </g>
+        <g class="node anim" style="--delay:.8s">
+          <rect x="355" y="130" width="205" height="86" rx="16" style="stroke:#ff5d8f"/>
+          <text x="457" y="160">AGENT (LLM)</text>
+          <text x="457" y="184" class="small">"what should I do next?"</text>
+          <text x="457" y="203" class="small">reasons · decides · re-plans</text>
+        </g>
+        <g class="node anim" style="--delay:2.6s">
+          <rect x="370" y="20" width="180" height="56" rx="12" style="stroke:#ffb454"/>
+          <text x="460" y="42">1 · PLAN</text><text x="460" y="62" class="small">decompose goal into steps</text>
+        </g>
+        <g class="node anim" style="--delay:4.6s">
+          <rect x="715" y="75" width="165" height="56" rx="12" style="stroke:#ffb454"/>
+          <text x="797" y="97">2 · ACT</text><text x="797" y="117" class="small">call tool / run code</text>
+        </g>
+        <g class="node anim" style="--delay:6.6s">
+          <rect x="715" y="195" width="165" height="56" rx="12" style="stroke:#ff5d8f"/>
+          <text x="797" y="217">3 · OBSERVE</text><text x="797" y="237" class="small">read the real result</text>
+        </g>
+        <g class="node anim" style="--delay:8.6s">
+          <rect x="370" y="252" width="180" height="54" rx="12" style="stroke:#7c9cff"/>
+          <text x="460" y="274">4 · RE-PLAN / DONE?</text><text x="460" y="293" class="small">adapt, retry or finish</text>
+        </g>
+        <g class="node anim" style="--delay:9.6s">
+          <rect x="145" y="252" width="185" height="54" rx="12" style="stroke:#ffb454"/>
+          <text x="237" y="274">Toolbelt</text>
+          <text x="237" y="293" class="small">browser · code · DB · files</text>
+        </g>
+        <path class="wire" d="M165,162 L350,162"/>
+        <path class="wire cycle" d="M457,130 L457,81" style="stroke:#ff5d8f"/>
+        <path class="wire cycle" d="M550,48 L710,95" style="stroke:#ff5d8f"/>
+        <path class="wire cycle" d="M797,131 L797,190" style="stroke:#ff5d8f"/>
+        <path class="wire cycle" d="M712,223 L565,190" style="stroke:#ff5d8f"/>
+        <path class="wire" d="M457,216 L457,247"/>
+        <path class="wire dash" d="M352,178 L330,258" style="stroke:#ffb454"/>
+        <text class="lbl" x="255" y="150" fill="#c78bff">goal</text>
+        <text class="lbl" x="318" y="222" fill="#ffb454">uses tools</text>
+        <g class="badge anim" style="--delay:11.4s">
+          <rect x="610" y="290" width="280" height="26" rx="13"/>
+          <text x="750" y="307" fill="#ff9db6">↻ UNBOUNDED LOOP UNTIL GOAL</text>
+        </g>
+        <circle class="pkt anim" r="7" cx="0" cy="0" fill="#c78bff" style="color:#c78bff;offset-path:path('M165,162 L350,162');--delay:1.2s;--dur:1.3s"/>
+        <circle class="pkt anim" r="7.5" cx="0" cy="0" fill="#ff5d8f" style="color:#ff5d8f;offset-path:path('M457,130 L457,81');--delay:3s;--dur:1s"/>
+        <circle class="pkt anim" r="7.5" cx="0" cy="0" fill="#ffb454" style="color:#ffb454;offset-path:path('M550,48 L710,95');--delay:4.4s;--dur:1.4s"/>
+        <circle class="pkt anim" r="7.5" cx="0" cy="0" fill="#ffb454" style="color:#ffb454;offset-path:path('M797,131 L797,190');--delay:6.2s;--dur:1.1s"/>
+        <circle class="pkt anim" r="7.5" cx="0" cy="0" fill="#ff5d8f" style="color:#ff5d8f;offset-path:path('M712,223 L565,190');--delay:7.8s;--dur:1.5s"/>
+        <circle class="pkt anim" r="7" cx="0" cy="0" fill="#7c9cff" style="color:#7c9cff;offset-path:path('M457,216 L457,247');--delay:9.6s;--dur:.9s"/>
+        <circle class="pkt anim" r="7" cx="0" cy="0" fill="#ffb454" style="color:#ffb454;offset-path:path('M352,178 L330,258');--delay:10.6s;--dur:1.2s"/>
+        <circle class="pkt anim" r="7.5" cx="0" cy="0" fill="#ff5d8f" style="color:#ff5d8f;offset-path:path('M457,130 L457,81');--delay:12.4s;--dur:1s"/>
+      </svg>
+    </div>
+    <ul class="narr">
+      <li class="anim" style="--delay:.3s">You hand it a <b>goal</b>, not a command. It breaks it into steps and picks its own tools (browser, code, DB, files…).</li>
+      <li class="anim" style="--delay:5s">It <b>acts → observes the real result → updates the plan</b>, including recovering from failures.</li>
+      <li class="anim" style="--delay:9.5s">And it keeps <b>looping until the goal is met</b> (or it asks you). No fixed pipeline to fall out of.</li>
+    </ul>
+    <div class="verdict anim" style="--delay:13s"><b>The real thing = loop + tools + goal + autonomy.</b> RAG can live inside it as one tool; the chatbot is just its most restricted cousin.</div>
+  </section>
+
+  <!-- SLIDE 6 : COMPARISON -->
+  <section class="slide" data-dur="18000" style="--accent:#8ea2ff">
+    <div class="shead"><span class="num">6</span><h2>Side-by-side summary</h2>
+      <span class="tag">same LLM · different harness</span></div>
+    <table>
+      <thead><tr><th>Capability</th><th>Chatbot</th><th>RAG</th><th>Agentic<br>Chatbot</th><th>Agentic<br>RAG</th><th>Agent</th></tr></thead>
+      <tbody>
+        <tr><td>Answers from trained weights</td><td class="yes">✔</td><td class="yes">✔</td><td class="yes">✔</td><td class="yes">✔</td><td class="yes">✔</td></tr>
+        <tr><td>Reads external knowledge</td><td class="no">✘</td><td class="yes">✔</td><td class="part">part</td><td class="yes">✔</td><td class="yes">✔</td></tr>
+        <tr><td>Calls tools / APIs</td><td class="no">✘</td><td class="part">1 fixed</td><td class="yes">✔</td><td class="yes">✔</td><td class="yes">✔</td></tr>
+        <tr><td>Decides its own next step</td><td class="no">✘</td><td class="no">✘</td><td class="part">a little</td><td class="yes">✔</td><td class="yes">✔</td></tr>
+        <tr><td>Loops until the goal is met</td><td class="no">✘</td><td class="no">✘</td><td class="no">✘</td><td class="yes">✔</td><td class="yes">✔</td></tr>
+        <tr><td>Multipurpose tools + planning</td><td class="no">✘</td><td class="no">✘</td><td class="no">✘</td><td class="part">retrieval only</td><td class="yes">✔</td></tr>
+        <tr><td>Recovers from failure</td><td class="no">✘</td><td class="no">✘</td><td class="no">✘</td><td class="part">re-query</td><td class="yes">✔</td></tr>
+        <tr><td><b>Is it an agent?</b></td><td class="no">No</td><td class="no">No</td><td class="no">No*</td><td class="part">Yes (narrow)</td><td class="yes">Yes</td></tr>
+      </tbody>
+    </table>
+    <div class="spectrum">
+      <p>Autonomy</p>
+      <div class="bar"><i class="anim" style="--w:10%;--delay:.3s"></i></div>
+      <p>RAG</p>
+      <div class="bar"><i class="anim" style="--w:25%;--delay:.6s"></i></div>
+      <p>Agentic chatbot</p>
+      <div class="bar"><i class="anim" style="--w:45%;--delay:.9s"></i></div>
+      <p>Agentic RAG</p>
+      <div class="bar"><i class="anim" style="--w:68%;--delay:1.2s"></i></div>
+      <p>Agent</p>
+      <div class="bar"><i class="anim" style="--w:95%;--delay:1.5s"></i></div>
+      <div class="scale"><span>frozen · one-shot</span><span>tool calls</span><span>plan + loop + autonomy</span></div>
+    </div>
+    <div class="verdict anim" style="--delay:3s"><b>Memory rule:</b> agent = LLM + <u>loop</u> + <u>tools</u> + <u>goal</u>. No loop → chatbot. Hard-coded loop around retrieval → agentic RAG. *Agentic chatbots get called "agents" in marketing — the tell is whether it runs a loop toward a goal.</div>
+  </section>
+
+</main>
+
+<div class="controls">
+  <button id="prev" title="Previous (←)">⏮ Prev</button>
+  <button id="play" class="primary">▶ Play</button>
+  <button id="next" title="Next (→)">Next ⏭</button>
+  <button id="replay">↺ Replay slide</button>
+  <label class="auto"><input type="checkbox" id="auto" checked> Autoplay</label>
+  <div class="dots" id="dots"></div>
+  <span class="kbd">space = play/pause · ← → = slides</span>
+</div>
+
+<script>
+(function(){
+  const slides=[...document.querySelectorAll('.slide')];
+  const dots=document.getElementById('dots');
+  const btnPlay=document.getElementById('play');
+  const btnPrev=document.getElementById('prev');
+  const btnNext=document.getElementById('next');
+  const btnReplay=document.getElementById('replay');
+  const chkAuto=document.getElementById('auto');
+  const progress=document.querySelector('.progress i');
+
+  let idx=0, playing=false, timer=null, t0=0, dur=0, remain=0;
+
+  slides.forEach((s,i)=>{
+    const b=document.createElement('button');
+    b.title='Slide '+(i+1);
+    b.onclick=()=>show(i);
+    dots.appendChild(b);
+  });
+
+  function restart(el){
+    el.style.animation='none';
+    el.getBoundingClientRect();
+    el.style.animation='';
+  }
+
+  function arm(ms){
+    clearTimeout(timer);
+    t0=Date.now();
+    timer=setTimeout(done,ms);
+  }
+
+  function show(i){
+    idx=(i+slides.length)%slides.length;
+    slides.forEach((s,k)=>s.classList.toggle('active',k===idx));
+    const s=slides[idx];
+    dur=+s.dataset.dur;
+    remain=dur;
+    document.documentElement.style.setProperty('--pd',(dur/1000)+'s');
+    s.querySelectorAll('.anim').forEach(restart);
+    restart(progress);
+    [...dots.children].forEach((d,k)=>d.classList.toggle('on',k===idx));
+    if(playing) arm(dur);
+  }
+
+  function done(){
+    if(chkAuto.checked){ show(idx+1); }
+    else { remain=0; setPaused(true); }
+  }
+
+  function setPaused(p){
+    playing=!p;
+    document.body.classList.toggle('paused',p);
+    btnPlay.textContent=p?'▶ Play':'❚❚ Pause';
+    clearTimeout(timer);
+    if(!p){ arm(remain>0?remain:dur); }
+    else if(dur>0){ remain=Math.max(0,dur-(Date.now()-t0)); }
+  }
+
+  btnPlay.onclick=()=>setPaused(!playing);
+  btnPrev.onclick=()=>show(idx-1);
+  btnNext.onclick=()=>show(idx+1);
+  btnReplay.onclick=()=>show(idx);
+  chkAuto.onchange=()=>{ if(chkAuto.checked&&playing) arm(remain>0?remain:dur); };
+
+  document.addEventListener('keydown',e=>{
+    if(e.key===' '){e.preventDefault();setPaused(!playing);}
+    if(e.key==='ArrowRight')show(idx+1);
+    if(e.key==='ArrowLeft')show(idx-1);
+  });
+
+  show(0);
+  setPaused(false);           // start playing immediately
+})();
+</script>
+</body>
+</html>

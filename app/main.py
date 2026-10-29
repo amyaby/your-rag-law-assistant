@@ -198,7 +198,7 @@ def ask(req: AskRequest):
     """
     t0 = time.perf_counter()
 
-    # 1. Rewrite Darija/Arabizi into formal legal Arabic search terms
+    # 1. Rewrite Darija/darija into formal legal Arabic search terms
     search_query = rephrase_query(req.question)
 
     # 2. Load conversation memory (optional feature, backwards compatible)

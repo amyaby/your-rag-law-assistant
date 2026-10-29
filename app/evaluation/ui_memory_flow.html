@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UI ↔ Memory ↔ DB ↔ Backend Flow</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<style>
+:root{--bg:#0f1020;--panel:#16172b;--card:#1d1f36;--border:#2f2f57;--red:#ff3b3b;--text:#e6e6e9;--muted:#a9a9c0;--green:#2ecc71;--blue:#4aa3ff;--amber:#ffd28a}
+*{margin:0;padding:0;box-sizing:border-box;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+body{background:var(--bg);color:var(--text);line-height:1.65;padding:1.5rem}
+.container{max-width:1500px;margin:0 auto}
+h1{color:var(--red);text-align:center;font-size:1.55rem;margin-bottom:.25rem}
+.sub{text-align:center;color:var(--muted);margin-bottom:1.3rem;font-size:.88rem}
+h2{color:#ffb3b3;margin:1.4rem 0 .7rem;font-size:1.1rem;border-left:4px solid var(--red);padding-left:.6rem}
+h3{color:#ffd0d0;margin:.9rem 0 .4rem;font-size:.98rem}
+.tabs{display:flex;gap:.55rem;flex-wrap:wrap;justify-content:center;margin-bottom:1.1rem}
+.tab{background:var(--panel);border:1px solid var(--border);color:var(--text);padding:.5rem 1rem;border-radius:11px;cursor:pointer;font-size:.82rem;transition:.15s}
+.tab:hover{border-color:var(--red)}
+.tab.active{background:var(--red);border-color:var(--red);color:#fff;font-weight:600}
+.deck-link{display:block;text-align:center;font-size:.8rem;color:#7c9cff;margin:-.45rem 0 1.05rem}
+.deck-link:hover{text-decoration:underline}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:1.3rem;margin-bottom:1.1rem;overflow:auto}
+.mermaid{background:transparent;text-align:center;min-height:80px}
+table{border-collapse:collapse;width:100%;margin:.7rem 0;font-size:.82rem}
+th,td{border:1px solid var(--border);padding:.42rem .55rem;text-align:left;vertical-align:top}
+th{background:#242450;color:#ffd0d0}
+code{background:#242440;color:var(--amber);padding:.06rem .32rem;border-radius:5px;font-size:.8rem}
+pre{background:#11121f;border:1px solid var(--border);border-radius:10px;padding:.8rem;overflow:auto;font-size:.78rem;line-height:1.5;color:#cfe8ff;margin:.6rem 0}
+.note{background:#20203a;border-left:3px solid var(--green);padding:.55rem .85rem;border-radius:8px;margin:.6rem 0;font-size:.84rem;color:var(--muted)}
+.warn{background:#2a1f1f;border-left:3px solid var(--red);padding:.55rem .85rem;border-radius:8px;margin:.6rem 0;font-size:.84rem;color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:.8rem}
+.card{background:var(--card);border:1px solid var(--border);border-radius:11px;padding:.8rem .9rem}
+.card b{color:var(--red)}
+.legend{display:flex;gap:1.1rem;flex-wrap:wrap;justify-content:center;margin-bottom:.9rem;font-size:.78rem;color:var(--muted)}
+.legend span{display:flex;align-items:center;gap:.35rem}
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+
+/* ---------------- animated replay ---------------- */
+.stage-scroll{overflow-x:auto;padding:.2rem 0 .5rem}
+.anim-stage{position:relative;min-width:840px}
+.actors{display:flex;justify-content:space-between;gap:.5rem;margin-bottom:.5rem}
+.actor{flex:1 1 0;text-align:center;background:#1d1f36;border:1px solid var(--border);border-radius:10px;padding:.38rem .35rem;font-size:.74rem;color:#cfe8ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rows{position:relative;border-top:1px dashed #242440}
+.step-row{position:relative;height:70px;--c:#4aa3ff}
+.step-row.t-req{--c:#4aa3ff}
+.step-row.t-res{--c:#2ecc71}
+.step-row.t-db{--c:#ffd28a}
+.step-row.t-net{--c:#ff5c5c}
+.step-row .wire{position:absolute;top:50%;height:2px;border-radius:2px;background:linear-gradient(90deg,rgba(255,255,255,.06),var(--c));opacity:.5;transition:opacity .18s,box-shadow .18s}
+.step-row.active .wire{opacity:1;box-shadow:0 0 12px var(--c),0 0 24px var(--c)}
+.step-row.done .wire{opacity:.8}
+.step-row .arrow{position:absolute;top:50%;width:0;height:0;border-top:5px solid transparent;border-bottom:5px solid transparent;border-left:7px solid var(--c);opacity:.5;transition:opacity .18s}
+.step-row.active .arrow,.step-row.done .arrow{opacity:1}
+.step-row .spark{position:absolute;top:50%;width:9px;height:9px;border-radius:50%;background:#fff;transform:translate(-50%,-50%);box-shadow:0 0 6px var(--c),0 0 14px var(--c),0 0 28px var(--c);opacity:0;z-index:3}
+.step-row.active .spark{opacity:1}
+.step-row .spark::after{content:"";position:absolute;inset:-8px;border-radius:50%;background:radial-gradient(circle,var(--c),transparent 68%);opacity:.5;filter:blur(2px)}
+.step-row .lbl{position:absolute;top:4px;transform:translateX(-50%);font-size:.72rem;line-height:1.2;text-align:center;background:#11121f;border:1px solid var(--border);border-radius:7px;padding:.1rem .45rem;color:#dce9ff;max-width:52%;z-index:2}
+.step-row .idx{position:absolute;left:2px;top:4px;font-size:.6rem;color:#6b6b8c}
+.step-row.note{height:48px}
+.step-row .note-box{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:.73rem;color:var(--muted);background:#1a1b2e;border:1px dashed var(--border);border-radius:8px;padding:.16rem .55rem;white-space:nowrap}
+.step-row.active .note-box{border-color:var(--c);color:#dce9ff;box-shadow:0 0 10px rgba(74,163,255,.25)}
+.controls{display:flex;gap:.55rem;align-items:center;flex-wrap:wrap;margin:.5rem 0}
+.ctrl{background:#242450;border:1px solid var(--border);color:var(--text);border-radius:10px;padding:.42rem .9rem;cursor:pointer;font-size:.8rem}
+.ctrl:hover{border-color:var(--red)}
+.ctrl.primary{background:var(--red);border-color:var(--red);color:#fff;font-weight:600}
+.ctrl:disabled{opacity:.45;cursor:not-allowed}
+.scen{display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.55rem}
+.scen button{background:var(--panel);border:1px solid var(--border);color:var(--text);border-radius:9px;padding:.32rem .7rem;font-size:.74rem;cursor:pointer}
+.scen button.active{background:#2b2b57;border-color:var(--blue);color:#fff}
+.counter{font-size:.76rem;color:var(--muted);margin-left:auto}
+.progress{height:4px;background:#242440;border-radius:99px;overflow:hidden;margin:.45rem 0 .7rem}
+.progress > i{display:block;height:100%;width:0;background:linear-gradient(90deg,#4aa3ff,#2ecc71);transition:width .25s}
+select.ctrl{padding:.4rem .5rem}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>UI &harr; Memory &harr; Database &harr; Backend</h1>
+<p class="sub">Exact request flow in <code>static/js/app.js</code> &middot; <code>app/main.py</code> &middot; <code>app/retrieval/vector_store.py</code> &middot; <code>app/core/llm.py</code></p>
+
+<div class="legend">
+  <span><i class="dot" style="background:#4aa3ff"></i>Browser / JS</span>
+  <span><i class="dot" style="background:#ffd28a"></i>PostgreSQL</span>
+  <span><i class="dot" style="background:#2ecc71"></i>FastAPI</span>
+  <span><i class="dot" style="background:#ff3b3b"></i>Gemini / CRAG (network)</span>
+</div>
+
+<div class="tabs">
+<button class="tab" data-tab="anim">&#9654; Animated replay</button>
+<button class="tab active" data-tab="init">1 &middot; Page load</button>
+<button class="tab" data-tab="first">2 &middot; First question</button>
+<button class="tab" data-tab="follow">3 &middot; Follow-up</button>
+<button class="tab" data-tab="reload">4 &middot; Reload / reopen</button>
+<button class="tab" data-tab="delete">5 &middot; Delete</button>
+<button class="tab" data-tab="slow">6 &middot; Why it was slow</button>
+<button class="tab" data-tab="data">7 &middot; JSON + DB rows</button>
+</div>
+<a class="deck-link" href="schema_flow.html">Open the schema forms + animated flow diagrams &rarr;</a>
+
+<!-- ================= ANIMATED REPLAY ================= -->
+<div id="anim" class="panel" style="display:none">
+<h2>Animated replay &mdash; glowing sparks on the wire</h2>
+<p class="sub">Each step fires a spark from the sender to the receiver. Play, pause, replay, or change speed.</p>
+
+<div class="scen">
+  <button data-scen="init" class="active">Page load</button>
+  <button data-scen="first">First question</button>
+  <button data-scen="follow">Follow-up</button>
+  <button data-scen="reload">Reload</button>
+  <button data-scen="delete">Delete</button>
+</div>
+
+<div class="controls">
+  <button id="anim-play" class="ctrl primary">&#9654; Play</button>
+  <button id="anim-replay" class="ctrl">&#8635; Replay</button>
+  <label class="counter">Speed
+    <select id="anim-speed" class="ctrl">
+      <option value="0.5">0.5x</option>
+      <option value="1" selected>1x</option>
+      <option value="1.5">1.5x</option>
+      <option value="2">2x</option>
+    </select>
+  </label>
+  <span id="anim-counter" class="counter">step 0 / 0</span>
+</div>
+<div class="progress"><i id="anim-progress"></i></div>
+
+<div class="stage-scroll">
+  <div class="anim-stage" id="anim-stage">
+    <div class="actors" id="anim-actors"></div>
+    <div class="rows" id="anim-rows"></div>
+  </div>
+</div>
+
+<div class="note">Wire colours: <b style="color:#4aa3ff">blue</b> request &middot; <b style="color:#2ecc71">green</b> response &middot; <b style="color:#ffd28a">amber</b> SQL &middot; <b style="color:#ff5c5c">red</b> network (Gemini / CRAG). Amber steps are logged in the same trace as the request.</div>
+</div>
+
+<!-- ================= 1 INIT ================= -->
+<div id="init" class="panel">
+<h2>1 &middot; Page load &mdash; restore the active conversation</h2>
+<div class="mermaid">
+sequenceDiagram
+  autonumber
+  participant B as Browser app.js
+  participant LS as localStorage
+  participant API as FastAPI main.py
+  participant DB as PostgreSQL
+  B->>LS: getItem ACTIVE_KEY
+  LS-->>B: activeId or null
+  B->>API: GET /conversations
+  API->>DB: SELECT c.id, c.title, count(m.id) FROM conversations LEFT JOIN messages
+  DB-->>API: rows
+  API-->>B: conversations list
+  alt activeId exists in the list
+    B->>API: GET /conversations/id
+    API->>DB: SELECT role, content FROM messages ORDER BY id DESC LIMIT 200
+    DB-->>API: messages
+    API-->>B: messages
+    Note over B: render the transcript, no model call
+  else no active conversation
+    B->>API: POST /conversations title
+    API->>DB: INSERT INTO conversations id, title
+    DB-->>API: ok
+    API-->>B: conversation_id
+    B->>LS: setItem ACTIVE_KEY, id
+    Note over B: show welcome screen
+  end
+</div>
+<table>
+<tr><th>Where</th><th>What happens</th></tr>
+<tr><td><code>app.js:36</code></td><td><code>ACTIVE_KEY = 'lm3assidak_active_conversation'</code> — only the <b>id</b> is stored locally.</td></tr>
+<tr><td><code>app.js:232</code></td><td><code>loadConversations()</code> &rarr; <code>GET /conversations</code> fills the sidebar.</td></tr>
+<tr><td><code>app.js init()</code></td><td>If the saved id is in the list &rarr; <code>openConversation</code>; otherwise &rarr; <code>newConversation()</code>.</td></tr>
+<tr><td><code>main.py:273-299</code></td><td>Conversation CRUD endpoints.</td></tr>
+<tr><td><code>vector_store.py:226</code></td><td><code>list_conversations()</code> returns id, title, created_at, message count.</td></tr>
+</table>
+<div class="note"><b>Side effect you can observe in the DB:</b> because init always creates a conversation when none is active, an unused page load leaves an empty conversation (0 messages). That is exactly the <code>1f1733d2217444a8</code> row with <code>title='محادثة جديدة'</code> and zero messages.</div>
+</div>
+
+<!-- ================= 2 FIRST ================= -->
+<div id="first" class="panel" style="display:none">
+<h2>2 &middot; First question &mdash; the full write path</h2>
+<div class="mermaid">
+sequenceDiagram
+  autonumber
+  participant U as User
+  participant B as Browser app.js
+  participant API as FastAPI ask
+  participant G as Gemini
+  participant DB as PostgreSQL
+  participant W as CRAG adala/ism/web
+  U->>B: type question and press Enter
+  B->>B: addUser question, show typing dots
+  B->>API: POST /ask question + conversation_id
+  API->>G: rephrase_query only if no Arabic script
+  G-->>API: formal Arabic search query
+  API->>DB: get_messages conversation_id, limit 12
+  DB-->>API: [] first turn
+  API->>API: retrieve hybrid_search
+  API->>DB: dense_candidates SELECT embedding <=> query LIMIT 40
+  DB-->>API: 40 rows with similarity
+  API->>API: BM25 scores + RRF + OR-admission
+  API->>API: crag_needed best dense below 0.78
+  opt retrieval is weak
+    API->>W: corrective_search adala then ism then web
+    W-->>API: relevant scraped chunks
+  end
+  API->>API: build context law + article labels
+  API->>G: generate_answer question + context + history
+  G-->>API: Arabic answer
+  API->>G: generate_suggestions
+  G-->>API: follow-up chips
+  API->>DB: create_conversation if id unknown
+  API->>DB: add_message user, add_message assistant
+  DB-->>API: ok, title updated
+  API-->>B: answer + sources + scraped + suggestions + conversation_id
+  B->>B: render bubbles + sources accordion + followups
+  B->>B: save conversation_id, reload sidebar
+</div>
+<table>
+<tr><th>Step</th><th>Code</th><th>Cost</th></tr>
+<tr><td>POST /ask</td><td><code>app.js ask()</code>, <code>main.py:183</code></td><td>network</td></tr>
+<tr><td>Rephrase</td><td><code>llm.py rephrase_query</code> &mdash; skipped when input already has Arabic script</td><td>1 Gemini call or 0</td></tr>
+<tr><td>Load memory</td><td><code>main.py:206-208</code> &rarr; <code>vector_store.get_messages</code> (limit 12)</td><td>1 SQL</td></tr>
+<tr><td>Retrieve</td><td><code>retriever.retrieve</code> &rarr; <code>hybrid_search</code> &rarr; <code>dense_candidates</code></td><td>1 SQL + in-RAM BM25</td></tr>
+<tr><td>CRAG decision</td><td><code>retriever.crag_needed</code> &mdash; best <b>dense</b> similarity &lt; 0.78</td><td>free</td></tr>
+<tr><td>CRAG</td><td><code>corrective.py</code> &rarr; adala &rarr; ism &rarr; web</td><td>network, 8s timeout</td></tr>
+<tr><td>Answer</td><td><code>llm.generate_answer</code></td><td>1 Gemini call</td></tr>
+<tr><td>Suggestions</td><td><code>llm.generate_suggestions</code></td><td>1 Gemini call</td></tr>
+<tr><td>Persist</td><td><code>main.py:250-254</code> &rarr; <code>add_message</code> x2</td><td>2 SQL inserts</td></tr>
+</table>
+<div class="warn"><b>Answer latency = generation, not retrieval.</b> A healthy non-scraped request in the logs: <code>retrieve_ms=412 total_ms=1583</code>. The three Gemini calls dominate. If CRAG fires, add the network path.</div>
+</div>
+
+<!-- ================= 3 FOLLOW ================= -->
+<div id="follow" class="panel" style="display:none">
+<h2>3 &middot; Follow-up &mdash; where memory actually matters</h2>
+<div class="mermaid">
+sequenceDiagram
+  autonumber
+  participant U as User
+  participant B as Browser app.js
+  participant API as FastAPI ask
+  participant DB as PostgreSQL
+  participant G as Gemini
+  U->>B: follow-up question, same conversation_id
+  B->>API: POST /ask question + conversation_id
+  API->>DB: get_messages conversation_id, limit 12
+  DB-->>API: last 12 messages oldest first
+  API->>API: retrieve uses the CURRENT question only
+  API->>API: context from hybrid and optional CRAG
+  API->>G: generate_answer question + context + history block
+  Note over G: history = last 6 messages<br/>each truncated to 600 chars<br/>wrapped in turn role tags
+  G-->>API: answer that resolves this or that
+  API->>DB: add_message user and assistant
+  API-->>B: answer + sources + suggestions
+  B->>B: append bubbles, keep id in localStorage
+</div>
+<table>
+<tr><th>Concept</th><th>Detail</th></tr>
+<tr><td>Name</td><td>Server-side, sliding-window conversation memory (last-N messages)</td></tr>
+<tr><td>Loaded</td><td><code>get_messages(cid, limit=memory_turns*2=12)</code> &mdash; subquery <code>ORDER BY id DESC LIMIT</code>, re-sorted oldest-first</td></tr>
+<tr><td>Injected</td><td><code>llm._history_block</code> &mdash; <code>history[-6:]</code>, 600 chars each, <code>&lt;turn role=...&gt;</code>, labelled <i>not instructions</i></td></tr>
+<tr><td>Persisted</td><td><code>add_message</code> after generation &mdash; history is loaded <b>before</b> the current turn is written, so the question is not duplicated</td></tr>
+<tr><td>Survives</td><td>refresh and a different device (transcript is in PostgreSQL)</td></tr>
+</table>
+<div class="warn"><b>Two limits worth stating honestly.</b><br>
+1) <b>Memory does not affect retrieval.</b> <code>rephrase_query(question)</code> and <code>retrieve()</code> never see history, so a vague follow-up can still retrieve the wrong article.<br>
+2) <b>Window is effectively 3 turns, not 6.</b> <code>main.py</code> loads 12 messages, then <code>_history_block</code> keeps only the last 6 <i>messages</i> &mdash; the constant is named <code>memory_turns</code> but is applied to messages.</div>
+</div>
+
+<!-- ================= 4 RELOAD ================= -->
+<div id="reload" class="panel" style="display:none">
+<h2>4 &middot; Reload / open an old conversation &mdash; read-only, no LLM</h2>
+<div class="mermaid">
+sequenceDiagram
+  autonumber
+  participant B as Browser app.js
+  participant LS as localStorage
+  participant API as FastAPI
+  participant DB as PostgreSQL
+  B->>LS: getItem ACTIVE_KEY
+  LS-->>B: conversation id
+  B->>API: GET /conversations/id
+  API->>DB: SELECT role, content FROM messages WHERE conversation_id ORDER BY id LIMIT 200
+  DB-->>API: full transcript
+  API-->>B: messages array
+  B->>B: rebuild bubbles, sources not stored so no source panel
+</div>
+<div class="note">This path costs <b>one SQL query</b>: no embedding, no Gemini, no CRAG. It is why reopening a conversation is instant while asking a new question is not.</div>
+<div class="warn">Known limitation from <code>README.md</code>: the transcript stores the answer text only. Reopening restores answers but <b>not</b> their <code>sources</code>, so old answers show no source accordion.</div>
+</div>
+
+<!-- ================= 5 DELETE ================= -->
+<div id="delete" class="panel" style="display:none">
+<h2>5 &middot; Delete a conversation</h2>
+<div class="mermaid">
+sequenceDiagram
+  autonumber
+  participant B as Browser app.js
+  participant LS as localStorage
+  participant API as FastAPI
+  participant DB as PostgreSQL
+  B->>API: DELETE /conversations/id
+  API->>DB: DELETE FROM messages WHERE conversation_id
+  API->>DB: DELETE FROM conversations WHERE id
+  DB-->>API: ok cascade
+  API-->>B: status deleted
+  B->>LS: removeItem ACTIVE_KEY if it was active
+  B->>API: GET /conversations
+  API-->>B: updated list
+  B->>B: clear chat, show welcome
+</div>
+<table>
+<tr><th>Layer</th><th>Behaviour</th></tr>
+<tr><td>Schema</td><td><code>messages.conversation_id ... ON DELETE CASCADE</code> — even without the explicit delete, orphan messages cannot survive.</td></tr>
+<tr><td>Code</td><td><code>delete_conversation</code> (<code>vector_store.py:245</code>) deletes messages first, then the conversation.</td></tr>
+<tr><td>Frontend</td><td>Captures <code>wasActive</code> before clearing, because deleting the active chat must also clear localStorage.</td></tr>
+</table>
+</div>
+
+<!-- ================= 6 SLOW ================= -->
+<div id="slow" class="panel" style="display:none">
+<h2>6 &middot; Why replies were slow before hybrid</h2>
+<div class="mermaid">
+flowchart TD
+  Q[User question] --> RP[Gemini rephrase]
+  RP --> D[Dense-only retrieval]
+  D --> GATE{best dense below 0.78}
+  GATE -- often, weak lexical recall --> CR[CRAG scraping]
+  CR --> S1[adala fetch pages]
+  S1 --> S2[ism fetch pages]
+  S2 --> S3[web search .ma]
+  S3 --> GEN[Gemini answer]
+  GEN --> SUG[Gemini suggestions]
+  GEN -.-> RETRY[429/503 retries with backoff]
+  SUG -.-> RETRY
+  RETRY --> SLOW[Seconds to tens of seconds]
+</div>
+<div class="grid">
+  <div class="card"><b>1. Serial CRAG fetch (the big one)</b><br>Before the D3 fix, <code>corrective_search</code> fetched up to 4 pages <b>one after another</b> with <code>timeout=10</code> &rarr; up to <b>40 s per scraper</b>, and the chain tries adala &rarr; ism &rarr; web. Fix: <code>ThreadPoolExecutor</code> + one shared <code>requests.Session</code> + <code>web_timeout=8</code> &rarr; worst case <b>~8 s</b>.</div>
+  <div class="card"><b>2. CRAG fired too often</b><br>Dense-only retrieval missed exact legal nouns and Darija/Arabizi wording, so <code>best_dense &lt; 0.78</code> and the network path opened on many questions. BM25 surfaced the exact-term chunk, so more questions were answerable from the local index.</div>
+  <div class="card"><b>3. Three sequential Gemini calls</b><br><code>rephrase_query</code> + <code>generate_answer</code> + <code>generate_suggestions</code>. Each is a network round-trip; the rephrase alone measured around <b>5.7 s</b> in this environment.</div>
+  <div class="card"><b>4. Retry + fallback backoff</b><br><code>llm_max_attempts=3</code> per model, <code>llm_backoff_base=1.6</code>, up to 3 models. A 429/503 sleeps <code>1.6^n</code> before retrying &mdash; correct for resilience, expensive in wall-clock time.</div>
+  <div class="card"><b>5. No answer cache</b><br>The rephrase result is cached, but answers are not (F4 still open), so asking the same question twice pays the full generation cost again.</div>
+  <div class="card"><b>6. Ingestion was slow too (different phase)</b><br>Gemini embeddings were one API call per chunk for thousands of chunks, plus the 100 req/min quota. Local e5 removed that from ingestion; it never affected query latency.</div>
+</div>
+<div class="note"><b>Honest framing:</b> hybrid did not make the retrieval step itself faster &mdash; it runs in the same milliseconds. It made retrieval <b>right</b> more often, which reduced how often the expensive fallback was needed. The measured latency win came from the CRAG parallelisation, the 8 s timeout, and disciplined retries. Healthy request in the logs: <code>retrieve_ms=412 total_ms=1583</code>.</div>
+<div class="warn"><b>Current timing bug:</b> <code>retrieve_ms</code> is measured from request start to <code>t_gen</code>, so it includes rephrase + memory + retrieval + CRAG. It is mislabelled; it should be split into <code>pre_gen_ms</code> and a true retrieval time.</div>
+</div>
+
+<!-- ================= 7 DATA ================= -->
+<div id="data" class="panel" style="display:none">
+<h2>7 &middot; Example: request, response, and DB rows</h2>
+
+<h3>First request (Darija / non-Arabic script)</h3>
+<pre>POST /ask
+{
+  "question": "chno hiya oqouba sarqa f article 505?",
+  "conversation_id": "34d4add30cd055a7"
+}</pre>
+
+<pre>internal: rephrase_query -> "ما هي عقوبة السرقة في المادة 505؟"
+          get_messages(cid, 12) -> [...]   (previous turns)
+          retrieve -> hybrid_bm25_rrf, top result similarity ~0.85</pre>
+
+<h3>Response to the browser</h3>
+<pre>{
+  "answer": "حسب المادة 505 من القانون الجنائي ...",
+  "sources": [
+    {"law": "code-penal-2024.pdf", "article": "505",
+     "similarity": 0.85, "dense_rank": 1, "bm25_rank": 3,
+     "rrf_score": 0.021, "via": "dense+bm25"}
+  ],
+  "scraped": false,
+  "suggestions": ["ما هي عقوبة السرقة في المادة 505؟", "..."],
+  "conversation_id": "34d4add30cd055a7",
+  "retriever": "hybrid_bm25_rrf"
+}</pre>
+
+<h3>Follow-up in the same conversation</h3>
+<pre>POST /ask
+{
+  "question": "واش كاين شي استثناء؟",
+  "conversation_id": "34d4add30cd055a7"
+}
+
+backend loads the last 12 messages, injects the last 6 into the prompt,
+retrieves with the follow-up text only, then persists both new messages.</pre>
+
+<h3>What the database looks like afterwards</h3>
+<pre>conversations
+ id               | title                          | created_at
+ 34d4add30cd055a7 | chno l7wayej li khasni ...      | 2026-10-01 00:29
+
+messages
+ id | conversation_id  | role      | content
+ .. | 34d4add30cd055a7 | user      | chno hiya oqouba sarqa ...
+ .. | 34d4add30cd055a7 | assistant | حسب المادة 505 ...
+ .. | 34d4add30cd055a7 | user      | واش كاين شي استثناء؟
+ .. | 34d4add30cd055a7 | assistant | نعم، المادة ...
+</pre>
+
+<h3>Verify it yourself</h3>
+<pre>PGPASSWORD=alx psql -h 127.0.0.1 -U postgres -d assistant
+
+SELECT id, title, created_at FROM conversations ORDER BY created_at DESC;
+SELECT id, role, left(content, 60) FROM messages
+ WHERE conversation_id = '34d4add30cd055a7' ORDER BY id;
+SELECT conversation_id, count(*) FROM messages GROUP BY 1;</pre>
+
+<div class="note">Files that own each layer: <code>static/js/app.js</code> (UI + localStorage id) &rarr; <code>app/main.py</code> (routes + orchestration) &rarr; <code>app/retrieval/vector_store.py</code> (schema + memory helpers) &rarr; <code>app/core/llm.py</code> (history block + generation).</div>
+</div>
+
+</div>
+
+<script>
+mermaid.initialize({startOnLoad:false, theme:"dark", securityLevel:"loose",
+  sequence:{useMaxWidth:true, wrap:true, mirrorActors:false},
+  flowchart:{curve:"basis"}});
+
+const tabs = document.querySelectorAll('.tab');
+function show(id){
+  document.querySelectorAll('.panel').forEach(p => p.style.display = 'none');
+  const el = document.getElementById(id);
+  el.style.display = 'block';
+  const nodes = el.querySelectorAll('.mermaid');
+  const pending = Array.from(nodes).filter(n => !n.dataset.processed);
+  if (pending.length) mermaid.run({nodes: pending});
+}
+tabs.forEach(btn => {
+  btn.onclick = () => {
+    tabs.forEach(x => x.classList.remove('active'));
+    btn.classList.add('active');
+    show(btn.dataset.tab);
+    try {
+      history.replaceState(null, '', '#' + btn.dataset.tab);
+    } catch (e) {
+      location.hash = btn.dataset.tab;
+    }
+  };
+});
+const startTab = (location.hash || '').replace('#', '');
+show(document.getElementById(startTab) ? startTab : 'init');
+</script>
+
+<script>
+(function(){
+  const SCENARIOS = {
+    init: {
+      actors: ["Browser", "localStorage", "FastAPI", "PostgreSQL"],
+      steps: [
+        {from:0, to:1, label:"getItem(ACTIVE_KEY)", t:"req"},
+        {from:1, to:0, label:"activeId or null", t:"res"},
+        {from:0, to:2, label:"GET /conversations", t:"req"},
+        {from:2, to:3, label:"SELECT conversations + message counts", t:"db"},
+        {from:3, to:2, label:"rows", t:"res"},
+        {from:2, to:0, label:"conversations list", t:"res"},
+        {note:"active id found? open it : create a new conversation"},
+        {from:0, to:2, label:"GET /conversations/{id}   or   POST /conversations", t:"req"},
+        {from:2, to:3, label:"SELECT messages ... LIMIT 200", t:"db"},
+        {from:3, to:2, label:"transcript", t:"res"},
+        {from:2, to:0, label:"messages", t:"res"},
+        {note:"this path costs SQL only: no embedding, no Gemini"}
+      ]
+    },
+    first: {
+      actors: ["User", "Browser", "FastAPI", "Gemini", "PostgreSQL", "CRAG"],
+      steps: [
+        {from:0, to:1, label:'type: "chno hiya oqouba sarqa f article 505?"', t:"req"},
+        {from:1, to:2, label:"POST /ask  {question, conversation_id}", t:"req"},
+        {from:2, to:3, label:"rephrase_query (Latin script)", t:"net"},
+        {from:3, to:2, label:"formal Arabic query", t:"res"},
+        {from:2, to:4, label:"get_messages(cid, 12)", t:"db"},
+        {from:4, to:2, label:"[] first turn", t:"res"},
+        {from:2, to:4, label:"dense_candidates: embedding <=> query LIMIT 40", t:"db"},
+        {from:4, to:2, label:"40 rows + similarity", t:"res"},
+        {note:"BM25 scores + RRF fusion + OR-admission"},
+        {note:"best dense >= 0.78 (threshold)  ->  CRAG skipped"},
+        {from:2, to:3, label:"generate_answer(question, context, history)", t:"net"},
+        {from:3, to:2, label:"Arabic answer", t:"res"},
+        {from:2, to:3, label:"generate_suggestions", t:"net"},
+        {from:3, to:2, label:"follow-up chips", t:"res"},
+        {from:2, to:4, label:"add_message(user) + add_message(assistant)", t:"db"},
+        {from:4, to:2, label:"ok, title updated", t:"res"},
+        {from:2, to:1, label:"JSON answer + sources + suggestions + conversation_id", t:"res"},
+        {from:1, to:0, label:"render bubbles + sources accordion", t:"res"}
+      ]
+    },
+    follow: {
+      actors: ["User", "Browser", "FastAPI", "PostgreSQL", "Gemini"],
+      steps: [
+        {from:0, to:1, label:'follow-up: "واش كاين شي استثناء؟"', t:"req"},
+        {from:1, to:2, label:"POST /ask  same conversation_id", t:"req"},
+        {from:2, to:3, label:"get_messages(cid, 12)  ->  last 6 kept", t:"db"},
+        {from:3, to:2, label:"previous turns", t:"res"},
+        {note:"retrieval uses the current question only, not history"},
+        {from:2, to:3, label:"dense + BM25 retrieve", t:"db"},
+        {from:3, to:2, label:"candidates", t:"res"},
+        {from:2, to:4, label:"generate_answer + <turn> history block", t:"net"},
+        {from:4, to:2, label:"context-aware answer", t:"res"},
+        {from:2, to:3, label:"add_message(user) + add_message(assistant)", t:"db"},
+        {from:2, to:1, label:"answer + suggestions", t:"res"},
+        {from:1, to:0, label:"append bubbles", t:"res"}
+      ]
+    },
+    reload: {
+      actors: ["Browser", "localStorage", "FastAPI", "PostgreSQL"],
+      steps: [
+        {from:0, to:1, label:"getItem(ACTIVE_KEY)", t:"req"},
+        {from:1, to:0, label:"conversation id", t:"res"},
+        {from:0, to:2, label:"GET /conversations/{id}", t:"req"},
+        {from:2, to:3, label:"SELECT messages ... LIMIT 200", t:"db"},
+        {from:3, to:2, label:"transcript", t:"res"},
+        {from:2, to:0, label:"messages", t:"res"},
+        {note:"no embedding, no Gemini, no CRAG on this path"},
+        {from:0, to:1, label:"sources are NOT stored: only role + content", t:"res"}
+      ]
+    },
+    delete: {
+      actors: ["Browser", "localStorage", "FastAPI", "PostgreSQL"],
+      steps: [
+        {from:0, to:2, label:"DELETE /conversations/{id}", t:"req"},
+        {from:2, to:3, label:"DELETE FROM messages WHERE conversation_id = ...", t:"db"},
+        {from:2, to:3, label:"DELETE FROM conversations WHERE id = ...", t:"db"},
+        {from:3, to:2, label:"ok", t:"res"},
+        {from:2, to:0, label:"deleted", t:"res"},
+        {from:0, to:1, label:"removeItem(ACTIVE_KEY)", t:"req"},
+        {from:0, to:2, label:"GET /conversations", t:"req"},
+        {from:2, to:0, label:"updated list", t:"res"},
+        {note:"clear chat + show welcome state"}
+      ]
+    }
+  };
+
+  const actorsEl  = document.getElementById('anim-actors');
+  const rowsEl    = document.getElementById('anim-rows');
+  const playBtn   = document.getElementById('anim-play');
+  const replayBtn = document.getElementById('anim-replay');
+  const speedSel  = document.getElementById('anim-speed');
+  const counter   = document.getElementById('anim-counter');
+  const prog      = document.getElementById('anim-progress');
+  const scenBtns  = Array.from(document.querySelectorAll('.scen button'));
+
+  let current = 'init';
+  let rows = [];
+  let stepIndex = 0;
+  let playing = false;
+  let activeAnim = null;
+  let token = 0;
+  let loopRunning = false;
+  let animReady = false;
+
+  function speed(){ return parseFloat(speedSel.value) || 1; }
+  function wait(ms){ return new Promise(r => setTimeout(r, ms)); }
+  function esc(s){
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function updateUI(){
+    playBtn.innerHTML = playing ? '&#10074;&#10074; Pause' : '&#9654; Play';
+    counter.textContent = 'step ' + stepIndex + ' / ' + rows.length;
+    prog.style.width = rows.length ? (stepIndex / rows.length * 100) + '%' : '0%';
+  }
+
+  function cancelAnims(){
+    rows.forEach(r => {
+      const s = r.querySelector('.spark');
+      if (s) s.getAnimations().forEach(a => a.cancel());
+    });
+  }
+
+  function resetProgress(){
+    token++;
+    if (activeAnim) { try { activeAnim.cancel(); } catch(e){} activeAnim = null; }
+    cancelAnims();
+    loopRunning = false;
+    playing = false;
+    rows.forEach(r => r.classList.remove('active', 'done'));
+    stepIndex = 0;
+    updateUI();
+  }
+
+  function render(name){
+    token++;
+    if (activeAnim) { try { activeAnim.cancel(); } catch(e){} activeAnim = null; }
+    loopRunning = false;
+    playing = false;
+
+    current = name;
+    scenBtns.forEach(b => b.classList.toggle('active', b.dataset.scen === name));
+
+    const sc = SCENARIOS[name];
+    actorsEl.innerHTML = sc.actors.map(a => '<div class="actor">' + esc(a) + '</div>').join('');
+    const centers = Array.from(actorsEl.children).map(b => b.offsetLeft + b.offsetWidth / 2);
+    const stageW = rowsEl.clientWidth || 840;
+
+    rowsEl.innerHTML = '';
+    sc.steps.forEach((s, i) => {
+      const row = document.createElement('div');
+      row.className = 'step-row t-' + (s.t || 'req');
+      if (s.note) {
+        row.classList.add('note');
+        row.innerHTML = '<span class="idx">' + (i + 1) + '</span>' +
+                        '<div class="note-box">' + esc(s.note) + '</div>';
+      } else {
+        const x1 = centers[s.from];
+        const x2 = centers[s.to];
+        const left = Math.min(x1, x2);
+        const width = Math.abs(x2 - x1);
+        const dir = x2 >= x1 ? 0 : 180;
+        const mid = (x1 + x2) / 2;
+        let lblPos;
+        if (mid < stageW * 0.25) {
+          lblPos = 'left:' + (x1 + 8) + 'px;transform:none;text-align:left';
+        } else if (mid > stageW * 0.75) {
+          lblPos = 'left:' + (x2 - 8) + 'px;transform:translateX(-100%);text-align:right';
+        } else {
+          lblPos = 'left:' + mid + 'px;transform:translateX(-50%);text-align:center';
+        }
+        row.innerHTML =
+          '<span class="idx">' + (i + 1) + '</span>' +
+          '<div class="wire" style="left:' + left + 'px;width:' + width + 'px"></div>' +
+          '<span class="arrow" style="left:' + x2 + 'px;transform:translate(-50%,-50%) rotate(' + dir + 'deg)"></span>' +
+          '<div class="spark" style="left:' + x1 + 'px"></div>' +
+          '<div class="lbl" style="' + lblPos + '">' + esc(s.label) + '</div>';
+      }
+      rowsEl.appendChild(row);
+    });
+
+    rows = Array.from(rowsEl.children);
+    stepIndex = 0;
+    updateUI();
+  }
+
+  function animateRow(row){
+    const dot = row.querySelector('.spark');
+    const x1 = parseFloat(dot.style.left);
+    const x2 = parseFloat(row.querySelector('.arrow').style.left);
+    row.classList.add('active');
+    const a = dot.animate([
+      { left: x1 + 'px', opacity: 0 },
+      { left: x1 + 'px', opacity: 1, offset: 0.06 },
+      { left: x2 + 'px', opacity: 1 }
+    ], { duration: 850, easing: 'ease-in-out', fill: 'forwards' });
+    a.playbackRate = speed();
+    return a;
+  }
+
+  async function playFor(anim, ms, my){
+    let elapsed = 0;
+    const tick = 40;
+    while (elapsed < ms) {
+      await wait(tick);
+      if (my !== token) return false;
+      if (playing) {
+        elapsed += tick * speed();
+        if (anim.playState === 'paused') anim.play();
+      } else if (anim.playState === 'running') {
+        anim.pause();
+      }
+    }
+    try { anim.finish(); } catch(e) {}
+    return true;
+  }
+
+  async function pausableWait(ms, my){
+    let elapsed = 0;
+    const tick = 40;
+    while (elapsed < ms) {
+      await wait(tick);
+      if (my !== token) return false;
+      if (playing) elapsed += tick * speed();
+    }
+    return true;
+  }
+
+  async function run(my){
+    while (stepIndex < rows.length && my === token) {
+      if (!playing) {
+        await new Promise(r => {
+          const iv = setInterval(() => {
+            if (playing || my !== token) { clearInterval(iv); r(); }
+          }, 70);
+        });
+        if (my !== token) return;
+      }
+
+      const row = rows[stepIndex];
+      if (row.classList.contains('note')) {
+        row.classList.add('active');
+        const okNote = await pausableWait(520, my);
+        if (!okNote) return;
+        if (my !== token) return;
+        row.classList.remove('active');
+        row.classList.add('done');
+        stepIndex++;
+        updateUI();
+        await pausableWait(90, my);
+        continue;
+      }
+
+      const a = animateRow(row);
+      activeAnim = a;
+      if (!playing) a.pause();
+      const completed = await playFor(a, 850, my);
+      if (!completed) return;
+      if (my !== token) return;
+      activeAnim = null;
+      row.classList.remove('active');
+      row.classList.add('done');
+      stepIndex++;
+      updateUI();
+      await pausableWait(130, my);
+    }
+    if (my === token) { playing = false; updateUI(); }
+  }
+
+  function startPlay(){
+    if (stepIndex >= rows.length) resetProgress();
+    playing = true;
+    updateUI();
+    if (activeAnim && activeAnim.playState === 'paused') { activeAnim.play(); return; }
+    if (!loopRunning) {
+      loopRunning = true;
+      const my = token;
+      run(my).finally(() => { if (my === token) loopRunning = false; });
+    }
+  }
+
+  playBtn.onclick = () => {
+    if (playing) {
+      playing = false;
+      if (activeAnim) activeAnim.pause();
+      updateUI();
+      return;
+    }
+    if (stepIndex >= rows.length) resetProgress();
+    startPlay();
+  };
+
+  replayBtn.onclick = () => {
+    resetProgress();
+    playing = true;
+    updateUI();
+    loopRunning = true;
+    const my = token;
+    run(my).finally(() => { if (my === token) loopRunning = false; });
+  };
+
+  speedSel.onchange = () => {
+    if (activeAnim) activeAnim.playbackRate = speed();
+  };
+
+  scenBtns.forEach(b => {
+    b.onclick = () => {
+      render(b.dataset.scen);
+      startPlay();
+    };
+  });
+
+  const animTab = document.querySelector('[data-tab="anim"]');
+  animTab.addEventListener('click', () => {
+    document.querySelectorAll('.panel').forEach(p => p.style.display = 'none');
+    document.getElementById('anim').style.display = 'block';
+    document.querySelectorAll('.tab').forEach(t => {
+      t.classList.toggle('active', t.dataset.tab === 'anim');
+    });
+    try {
+      history.replaceState(null, '', '#anim');
+    } catch (e) {
+      location.hash = 'anim';
+    }
+    if (animReady) return;
+    animReady = true;
+    requestAnimationFrame(() => {
+      render('init');
+      startPlay();
+    });
+  });
+
+  let rz;
+  window.addEventListener('resize', () => {
+    if (!animReady) return;
+    clearTimeout(rz);
+    rz = setTimeout(() => {
+      const wasPlaying = playing;
+      render(current);
+      if (wasPlaying) startPlay();
+    }, 250);
+  });
+
+  function forceAnimTab(){
+    const h = location.hash;
+    if (h && h !== '#anim') return;
+    document.querySelectorAll('.panel').forEach(p => p.style.display = 'none');
+    document.getElementById('anim').style.display = 'block';
+    document.querySelectorAll('.tab').forEach(t => {
+      t.classList.toggle('active', t.dataset.tab === 'anim');
+    });
+  }
+
+  forceAnimTab();
+
+  function initialScenario(){
+    const q = new URLSearchParams(location.search).get('scen');
+    return SCENARIOS[q] ? q : 'init';
+  }
+
+  if (document.getElementById('anim').style.display !== 'none' && !animReady) {
+    animReady = true;
+    requestAnimationFrame(() => { render(initialScenario()); startPlay(); });
+  }
+})();
+</script>
+</body>
+</html>
